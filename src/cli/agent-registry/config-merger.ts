@@ -1,0 +1,95 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { validateConfigPath } from './path-validator.js';
+
+interface McpServerEntry {
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+}
+
+interface McpConfig {
+  mcpServers?: Record<string, McpServerEntry>;
+  [key: string]: unknown;
+}
+
+/**
+ * Read and parse an agent's MCP config file.
+ * Returns the parsed config, or a new empty config if the file doesn't exist or is malformed.
+ */
+function readConfig(configFilePath: string): { config: McpConfig; wasCreated: boolean } {
+  try {
+    const raw = fs.readFileSync(configFilePath, 'utf-8');
+    const config = JSON.parse(raw) as McpConfig;
+    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+      console.warn(`  Warning: ${configFilePath} contains invalid config, creating new.`);
+      return { config: {}, wasCreated: true };
+    }
+    return { config, wasCreated: false };
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { config: {}, wasCreated: true };
+    }
+    // Malformed JSON
+    console.warn(`  Warning: ${configFilePath} has malformed JSON, creating new.`);
+    return { config: {}, wasCreated: true };
+  }
+}
+
+/**
+ * Write config back to file, preserving pretty formatting.
+ */
+function writeConfig(configFilePath: string, config: McpConfig): void {
+  const dir = path.dirname(configFilePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2) + '\n', {
+    mode: 0o600,
+  });
+}
+
+/**
+ * Add or update the ChaosKB MCP server entry in an agent's config file.
+ * Preserves all other entries in the config.
+ */
+export async function mergeAgentConfig(
+  configFilePath: string,
+  args: string[] = [],
+): Promise<void> {
+  // Validate the config path is within allowed directories
+  validateConfigPath(configFilePath);
+
+  const { config } = readConfig(configFilePath);
+
+  // Ensure mcpServers exists
+  if (!config.mcpServers) {
+    config.mcpServers = {};
+  }
+
+  // Add/update chaoskb entry
+  config.mcpServers.chaoskb = {
+    command: 'chaoskb-mcp',
+    args,
+  };
+
+  writeConfig(configFilePath, config);
+}
+
+/**
+ * Remove the ChaosKB MCP server entry from an agent's config file.
+ * Preserves all other entries.
+ */
+export async function removeAgentConfig(configFilePath: string): Promise<void> {
+  validateConfigPath(configFilePath);
+
+  const { config } = readConfig(configFilePath);
+
+  if (config.mcpServers && 'chaoskb' in config.mcpServers) {
+    delete config.mcpServers.chaoskb;
+
+    // If mcpServers is now empty, keep the key but as empty object
+    // so the config file format remains valid for the agent
+    writeConfig(configFilePath, config);
+  }
+}

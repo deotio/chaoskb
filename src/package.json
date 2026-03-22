@@ -1,0 +1,53 @@
+{
+  "name": "@deotio/chaoskb-client",
+  "version": "0.1.0",
+  "description": "ChaosKB - E2E encrypted personal knowledge base with MCP integration",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deotio/chaoskb.git",
+    "directory": "src"
+  },
+  "keywords": ["chaoskb", "knowledge-base", "mcp", "encrypted-sync", "cli"],
+  "type": "module",
+  "main": "./dist/cli/index.js",
+  "types": "./dist/cli/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/cli/index.d.ts",
+      "default": "./dist/cli/index.js"
+    }
+  },
+  "bin": {
+    "chaoskb-mcp": "./dist/cli/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@mozilla/readability": "^0.6.0",
+    "@noble/ciphers": "^2.1.1",
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "better-sqlite3": "^12.8.0",
+    "bip39": "^3.1.0",
+    "commander": "^14.0.3",
+    "linkedom": "^0.18.12",
+    "onnxruntime-node": "^1.24.3",
+    "sodium-native": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

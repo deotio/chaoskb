@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "updatedAt": "2026-03-21T00:00:00Z",
+  "agents": [
+    {
+      "name": "claude-desktop",
+      "displayName": "Claude Desktop",
+      "platforms": ["darwin", "linux"],
+      "installPaths": {
+        "darwin": ["/Applications/Claude.app"],
+        "linux": ["/usr/bin/claude-desktop", "/opt/claude-desktop"]
+      },
+      "configPath": {
+        "darwin": "~/Library/Application Support/Claude/claude_desktop_config.json",
+        "linux": "~/.config/Claude/claude_desktop_config.json"
+      },
+      "configFormat": "json",
+      "supportsProjectConfig": false
+    },
+    {
+      "name": "claude-code",
+      "displayName": "Claude Code",
+      "platforms": ["darwin", "linux", "win32"],
+      "installPaths": {
+        "darwin": ["/usr/local/bin/claude"],
+        "linux": ["/usr/local/bin/claude", "/usr/bin/claude"],
+        "win32": ["C:\\Program Files\\Claude\\claude.exe"]
+      },
+      "configPath": {
+        "darwin": "~/.claude.json",
+        "linux": "~/.claude.json",
+        "win32": "~/.claude.json"
+      },
+      "configFormat": "json",
+      "supportsProjectConfig": false
+    },
+    {
+      "name": "cursor",
+      "displayName": "Cursor",
+      "platforms": ["darwin", "linux", "win32"],
+      "installPaths": {
+        "darwin": ["/Applications/Cursor.app"],
+        "linux": ["/usr/bin/cursor", "/opt/cursor/cursor"],
+        "win32": ["C:\\Users\\*\\AppData\\Local\\Programs\\Cursor\\Cursor.exe"]
+      },
+      "configPath": {
+        "darwin": "~/.cursor/mcp.json",
+        "linux": "~/.cursor/mcp.json",
+        "win32": "~/.cursor/mcp.json"
+      },
+      "configFormat": "json",
+      "supportsProjectConfig": true,
+      "projectConfigPath": ".cursor/mcp.json"
+    },
+    {
+      "name": "vscode",
+      "displayName": "VS Code",
+      "platforms": ["darwin", "linux", "win32"],
+      "installPaths": {
+        "darwin": ["/Applications/Visual Studio Code.app"],
+        "linux": ["/usr/bin/code", "/usr/share/code/code"],
+        "win32": ["C:\\Users\\*\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"]
+      },
+      "configPath": {
+        "darwin": "~/.vscode/mcp.json",
+        "linux": "~/.vscode/mcp.json",
+        "win32": "~/.vscode/mcp.json"
+      },
+      "configFormat": "json",
+      "supportsProjectConfig": true,
+      "projectConfigPath": ".vscode/mcp.json"
+    },
+    {
+      "name": "windsurf",
+      "displayName": "Windsurf",
+      "platforms": ["darwin", "linux", "win32"],
+      "installPaths": {
+        "darwin": ["/Applications/Windsurf.app"],
+        "linux": ["/usr/bin/windsurf"],
+        "win32": ["C:\\Users\\*\\AppData\\Local\\Programs\\Windsurf\\Windsurf.exe"]
+      },
+      "configPath": {
+        "darwin": "~/.codeium/windsurf/mcp_config.json",
+        "linux": "~/.codeium/windsurf/mcp_config.json",
+        "win32": "~/.codeium/windsurf/mcp_config.json"
+      },
+      "configFormat": "json",
+      "supportsProjectConfig": false
+    },
+    {
+      "name": "continue-dev",
+      "displayName": "Continue.dev",
+      "platforms": ["darwin", "linux", "win32"],
+      "installPaths": {
+        "darwin": [],
+        "linux": [],
+        "win32": []
+      },
+      "configPath": {
+        "darwin": "~/.continue/config.json",
+        "linux": "~/.continue/config.json",
+        "win32": "~/.continue/config.json"
+      },
+      "configFormat": "json",
+      "supportsProjectConfig": false
+    }
+  ]
+}

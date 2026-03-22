@@ -1,0 +1,97 @@
+import { describe, it, expect, vi } from 'vitest';
+import { ContentPipeline } from '../content-pipeline.js';
+import type { Chunk, EmbeddingVector } from '../types.js';
+
+/** Create a mock Embedder with controllable embed/embedBatch. */
+function createMockEmbedder() {
+  const dim = 384;
+  const fakeVector = (): EmbeddingVector => {
+    const v = new Float32Array(dim);
+    v[0] = 1; // simple non-zero vector
+    return v;
+  };
+
+  return {
+    embed: vi.fn(async (_text: string) => fakeVector()),
+    embedBatch: vi.fn(async (texts: string[]) => texts.map(() => fakeVector())),
+    initialize: vi.fn(async () => {}),
+    dispose: vi.fn(),
+    modelPath: '/fake/model.onnx',
+  };
+}
+
+describe('ContentPipeline', () => {
+  it('chunk delegates to chunkText with configured options', () => {
+    const embedder = createMockEmbedder();
+    const pipeline = new ContentPipeline(
+      { maxChunkTokens: 100, overlapTokens: 10 },
+      embedder as never,
+    );
+
+    const text = 'Hello world. This is a test sentence. Another one here.';
+    const chunks = pipeline.chunk(text);
+
+    expect(Array.isArray(chunks)).toBe(true);
+    expect(chunks.length).toBeGreaterThanOrEqual(1);
+    expect(chunks[0]).toHaveProperty('content');
+    expect(chunks[0]).toHaveProperty('index');
+    expect(chunks[0]).toHaveProperty('tokenCount');
+    expect(chunks[0]).toHaveProperty('byteOffset');
+  });
+
+  it('search returns indices of top-K results', () => {
+    const embedder = createMockEmbedder();
+    const pipeline = new ContentPipeline({}, embedder as never);
+
+    const query = new Float32Array([1, 0, 0]);
+    const embeddings: EmbeddingVector[] = [
+      new Float32Array([0, 1, 0]),
+      new Float32Array([1, 0, 0]),
+      new Float32Array([0, 0, 1]),
+    ];
+
+    const indices = pipeline.search(query, embeddings, 2);
+
+    expect(indices).toHaveLength(2);
+    // The most similar (index 1 = identical) should be first
+    expect(indices[0]).toBe(1);
+    // All returned values should be numbers
+    indices.forEach((idx) => expect(typeof idx).toBe('number'));
+  });
+
+  it('embedChunks zips embeddings with chunk data', async () => {
+    const embedder = createMockEmbedder();
+    const pipeline = new ContentPipeline({}, embedder as never);
+
+    const chunks: Chunk[] = [
+      { content: 'first chunk', index: 0, tokenCount: 5, byteOffset: 0 },
+      { content: 'second chunk', index: 1, tokenCount: 6, byteOffset: 12 },
+    ];
+
+    const result = await pipeline.embedChunks(chunks);
+
+    expect(result).toHaveLength(2);
+    expect(embedder.embedBatch).toHaveBeenCalledWith(['first chunk', 'second chunk']);
+
+    // Each result preserves chunk fields and adds embedding + model
+    expect(result[0].content).toBe('first chunk');
+    expect(result[0].index).toBe(0);
+    expect(result[0].model).toBe('snowflake-arctic-embed-s@384');
+    expect(result[0].embedding).toBeInstanceOf(Float32Array);
+    expect(result[0].embedding.length).toBe(384);
+
+    expect(result[1].content).toBe('second chunk');
+    expect(result[1].index).toBe(1);
+    expect(result[1].model).toBe('snowflake-arctic-embed-s@384');
+  });
+
+  it('embed delegates to the injected embedder', async () => {
+    const embedder = createMockEmbedder();
+    const pipeline = new ContentPipeline({}, embedder as never);
+
+    const vec = await pipeline.embed('test text');
+
+    expect(embedder.embed).toHaveBeenCalledWith('test text');
+    expect(vec).toBeInstanceOf(Float32Array);
+  });
+});

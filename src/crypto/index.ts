@@ -1,0 +1,14 @@
+export * from './types.js';
+export { SecureBuffer } from './secure-buffer.js';
+export { canonicalJson } from './canonical-json.js';
+export { generateBlobId } from './blob-id.js';
+export { aeadEncrypt, aeadDecrypt } from './aead.js';
+export { deriveKey, deriveKeySet } from './hkdf.js';
+export { deriveFromPassphrase as argon2Derive } from './argon2.js';
+export { constructAAD } from './aad.js';
+export { computeCommitment, verifyCommitment } from './commitment.js';
+export { encryptPayload, decryptEnvelope } from './envelope.js';
+export { parseSSHPublicKey, ed25519ToX25519PublicKey, ed25519ToX25519SecretKey } from './ssh-keys.js';
+export { EncryptionService } from './encryption-service.js';
+export { KeyringService } from './keyring.js';
+export { createProjectKey, unwrapProjectKey } from './project-keys.js';
