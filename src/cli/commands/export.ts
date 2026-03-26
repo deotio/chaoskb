@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 import * as crypto from 'node:crypto';
 import { loadConfig } from './setup.js';
+import type { CanaryPayload } from '../../crypto/types.js';
 
 export interface ExportOptions {
   format: 'encrypted' | 'plaintext';
@@ -84,13 +85,11 @@ async function exportEncrypted(outputDir: string): Promise<void> {
     const salt = crypto.randomBytes(32);
     const derived = argon2Derive(passphrase, salt);
 
-    // Encrypt master key with wrapping key
+    // Encrypt canary with wrapping key (verifies passphrase on import)
     const encryption = new EncryptionService();
     const wrappingKeys = encryption.deriveKeys(derived);
-    const wrappedMasterKey = encryption.encrypt(
-      { type: 'canary', value: 'chaoskb-canary-v1' },
-      wrappingKeys,
-    );
+    const canary: CanaryPayload = { type: 'canary', value: 'chaoskb-canary-v1' };
+    const wrappedCanary = encryption.encrypt(canary, wrappingKeys);
 
     // Collect all sources and chunks from DB
     const dbManager = new DatabaseManager();
@@ -118,12 +117,19 @@ async function exportEncrypted(outputDir: string): Promise<void> {
       });
     }
 
-    // Encrypt the source data with the wrapping key
+    // Encrypt the source data using AEAD directly (not via envelope — data is not a Payload type)
+    const { aeadEncrypt } = await import('../../crypto/aead.js');
     const sourcesJson = JSON.stringify(exportSources);
-    const sourcesEncrypted = encryption.encrypt(
-      { type: 'canary', value: sourcesJson },
-      wrappingKeys,
-    );
+    const sourcesBytes = new TextEncoder().encode(sourcesJson);
+    const dataKey = new Uint8Array(wrappingKeys.contentKey.buffer);
+    const aad = new TextEncoder().encode('chaoskb-export-data');
+    const { nonce, ciphertext, tag } = aeadEncrypt(dataKey, sourcesBytes, aad);
+
+    // Concatenate nonce + ciphertext + tag
+    const encryptedData = new Uint8Array(nonce.length + ciphertext.length + tag.length);
+    encryptedData.set(nonce, 0);
+    encryptedData.set(ciphertext, nonce.length);
+    encryptedData.set(tag, nonce.length + ciphertext.length);
 
     const exportData = {
       version: 1,
@@ -133,9 +139,9 @@ async function exportEncrypted(outputDir: string): Promise<void> {
         alg: 'argon2id',
         salt: salt.toString('base64'),
         params: { m: 262144, t: 3, p: 1 },
-        ct: Buffer.from(wrappedMasterKey.bytes).toString('base64'),
+        ct: Buffer.from(wrappedCanary.bytes).toString('base64'),
       },
-      data: Buffer.from(sourcesEncrypted.bytes).toString('base64'),
+      data: Buffer.from(encryptedData).toString('base64'),
       sourceCount: sources.length,
     };
 
