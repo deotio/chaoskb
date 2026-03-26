@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 import * as crypto from 'node:crypto';
 import { loadConfig } from './setup.js';
-import { SyncStatus } from '../../storage/types.js';
+import type { CanaryPayload } from '../../crypto/types.js';
 
 export interface ExportOptions {
   format: 'encrypted' | 'plaintext';
@@ -85,18 +85,51 @@ async function exportEncrypted(outputDir: string): Promise<void> {
     const salt = crypto.randomBytes(32);
     const derived = argon2Derive(passphrase, salt);
 
-    // Encrypt master key with wrapping key
+    // Encrypt canary with wrapping key (verifies passphrase on import)
     const encryption = new EncryptionService();
     const wrappingKeys = encryption.deriveKeys(derived);
-    const wrappedMasterKey = encryption.encrypt(
-      { type: 'canary', value: 'chaoskb-canary-v1' },
-      wrappingKeys,
-    );
+    const canary: CanaryPayload = { type: 'canary', value: 'chaoskb-canary-v1' };
+    const wrappedCanary = encryption.encrypt(canary, wrappingKeys);
 
-    // Collect all envelopes from DB
+    // Collect all sources and chunks from DB
     const dbManager = new DatabaseManager();
     const db = dbManager.getPersonalDb();
-    const _syncRecords = db.syncStatus.getByStatus(SyncStatus.Synced);
+    const sources = db.sources.list({}, { limit: 100000, offset: 0 });
+
+    const exportSources: Array<{
+      id: string;
+      url: string;
+      title: string;
+      tags: string[];
+      chunks: Array<{ index: number; content: string; tokenCount: number }>;
+    }> = [];
+
+    for (const source of sources) {
+      const chunks = db.chunks.getBySourceId(source.id);
+      exportSources.push({
+        id: source.id,
+        url: source.url,
+        title: source.title,
+        tags: source.tags,
+        chunks: chunks
+          .sort((a, b) => a.chunkIndex - b.chunkIndex)
+          .map((c) => ({ index: c.chunkIndex, content: c.content, tokenCount: c.tokenCount })),
+      });
+    }
+
+    // Encrypt the source data using AEAD directly (not via envelope — data is not a Payload type)
+    const { aeadEncrypt } = await import('../../crypto/aead.js');
+    const sourcesJson = JSON.stringify(exportSources);
+    const sourcesBytes = new TextEncoder().encode(sourcesJson);
+    const dataKey = new Uint8Array(wrappingKeys.contentKey.buffer);
+    const aad = new TextEncoder().encode('chaoskb-export-data');
+    const { nonce, ciphertext, tag } = aeadEncrypt(dataKey, sourcesBytes, aad);
+
+    // Concatenate nonce + ciphertext + tag
+    const encryptedData = new Uint8Array(nonce.length + ciphertext.length + tag.length);
+    encryptedData.set(nonce, 0);
+    encryptedData.set(ciphertext, nonce.length);
+    encryptedData.set(tag, nonce.length + ciphertext.length);
 
     const exportData = {
       version: 1,
@@ -106,9 +139,10 @@ async function exportEncrypted(outputDir: string): Promise<void> {
         alg: 'argon2id',
         salt: salt.toString('base64'),
         params: { m: 262144, t: 3, p: 1 },
-        ct: Buffer.from(wrappedMasterKey.bytes).toString('base64'),
+        ct: Buffer.from(wrappedCanary.bytes).toString('base64'),
       },
-      sourceCount: db.sources.count(),
+      data: Buffer.from(encryptedData).toString('base64'),
+      sourceCount: sources.length,
     };
 
     masterKey.dispose();
