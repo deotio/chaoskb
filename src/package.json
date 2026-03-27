@@ -1,6 +1,6 @@
 {
   "name": "@deotio/chaoskb-client",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "ChaosKB - E2E encrypted personal knowledge base with MCP integration",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,8 @@
     "prepack": "chmod +x dist/cli/index.js 2>/dev/null || true",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "node __e2e__/native-modules.mjs && node __e2e__/crypto-pipeline.mjs && node __e2e__/database-layer.mjs && node __e2e__/mcp-startup.mjs"
   },
   "publishConfig": {
     "access": "public"

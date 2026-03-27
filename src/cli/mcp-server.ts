@@ -206,7 +206,12 @@ export async function startMcpServer(options: McpServerOptions): Promise<void> {
   // Actual initialization requires loading config, opening DB, etc.
 
   const { loadConfig } = await import('./commands/setup.js');
-  const config = await loadConfig();
+  let config = await loadConfig();
+
+  if (!config && process.env.CHAOSKB_UNSAFE_NO_KEYRING === '1') {
+    // In CI/test mode, synthesize a minimal config so setup is not required
+    config = { securityTier: 'standard', projects: [] };
+  }
 
   if (!config) {
     console.error(
@@ -238,17 +243,27 @@ async function initializeDependencies(
   const { Embedder } = await import('../pipeline/embedder.js');
   const { ContentPipeline } = await import('../pipeline/content-pipeline.js');
 
-  // 1. Retrieve master key from OS keyring
-  const keyring = new KeyringService();
-  const masterKey = await keyring.retrieve('chaoskb', 'master-key');
-  if (!masterKey) {
-    throw new Error(
-      'Master key not found in OS keyring. Run `chaoskb-mcp setup` first.',
+  // 1. Set up encryption service
+  const encryption = new EncryptionService();
+
+  // 2. Retrieve master key from OS keyring (or generate ephemeral key for CI)
+  let masterKey;
+  if (process.env.CHAOSKB_UNSAFE_NO_KEYRING === '1') {
+    process.stderr.write(
+      '\n⚠ CHAOSKB_UNSAFE_NO_KEYRING=1 — key material is NOT protected by OS keyring. For testing only.\n\n',
     );
+    masterKey = encryption.generateMasterKey();
+  } else {
+    const keyring = new KeyringService();
+    masterKey = await keyring.retrieve('chaoskb', 'master-key');
+    if (!masterKey) {
+      throw new Error(
+        'Master key not found in OS keyring. Run `chaoskb-mcp setup` first.',
+      );
+    }
   }
 
-  // 2. Derive key set from master key
-  const encryption = new EncryptionService();
+  // 3. Derive key set from master key
   const keys = encryption.deriveKeys(masterKey);
 
   // 3. Initialize database
