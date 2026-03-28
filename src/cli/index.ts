@@ -11,6 +11,7 @@ import { statusCommand } from './commands/status.js';
 import { exportCommand } from './commands/export.js';
 import { importCommand } from './commands/import.js';
 import { projectCommand } from './commands/project.js';
+import { uninstallCommand } from './commands/uninstall.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
@@ -36,6 +37,13 @@ async function main(): Promise<void> {
     .description('ChaosKB - E2E encrypted personal knowledge base')
     .version(pkg.version)
     .option('--project <name>', 'scope operations to a project KB');
+
+  program
+    .command('help', { isDefault: false })
+    .description('Show help and available commands')
+    .action(() => {
+      program.outputHelp();
+    });
 
   program
     .command('setup')
@@ -104,6 +112,13 @@ async function main(): Promise<void> {
         overwrite: opts.overwrite,
         projectName: globalProject,
       });
+    });
+
+  program
+    .command('uninstall')
+    .description('Remove all ChaosKB data and agent registrations')
+    .action(async () => {
+      await uninstallCommand();
     });
 
   const project = program

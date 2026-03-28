@@ -14,7 +14,7 @@ Then set up and register with your chat agents:
 chaoskb-mcp setup && chaoskb-mcp register
 ```
 
-This auto-detects installed agents (Claude Desktop, Cursor, VS Code, etc.) and registers ChaosKB in their MCP configs.
+This auto-detects installed agents (Claude Desktop, Cursor, VS Code, etc.) and registers ChaosKB in their MCP configs. `register` is interactive — it shows you what it will write to each config file and asks for confirmation before making any changes.
 
 ## First run
 

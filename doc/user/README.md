@@ -1,7 +1,7 @@
 # User Guide
 
 - [Getting started](getting-started.md) — install, first save, first search
-- [Chat agent setup](chat-agent-setup.md) — register with Claude Desktop, Cursor, VS Code, etc.
+- [Chat agent setup](chat-agent-setup.md) — register with Claude Desktop, Cursor, VS Code, etc.; uninstall
 - [MCP tools reference](mcp-tools.md) — what you can ask your agent to do
 - [Project knowledge bases](project-knowledge-bases.md) — create, register, and use project-scoped KBs
 - [Security tiers](security-tiers.md) — choosing, upgrading, recovery

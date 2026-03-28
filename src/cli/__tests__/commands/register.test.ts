@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock readline to auto-confirm prompts
+vi.mock('node:readline', () => ({
+  createInterface: vi.fn(() => ({
+    question: vi.fn((_q: string, cb: (answer: string) => void) => cb('y')),
+    close: vi.fn(),
+  })),
+}));
+
 // Mock the dependencies
 vi.mock('../../agent-registry/detector.js', () => ({
   detectAgents: vi.fn(),
@@ -8,11 +16,13 @@ vi.mock('../../agent-registry/detector.js', () => ({
 vi.mock('../../agent-registry/config-merger.js', () => ({
   mergeAgentConfig: vi.fn(),
   removeAgentConfig: vi.fn(),
+  previewAgentConfig: vi.fn(),
+  MCP_SCRIPT_PATH: '/mock/dist/cli/index.js',
 }));
 
 import { registerCommand } from '../../commands/register.js';
 import { detectAgents } from '../../agent-registry/detector.js';
-import { mergeAgentConfig } from '../../agent-registry/config-merger.js';
+import { mergeAgentConfig, previewAgentConfig } from '../../agent-registry/config-merger.js';
 import type { DetectedAgent } from '../../agent-registry/types.js';
 
 function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
@@ -35,6 +45,15 @@ function makeAgent(overrides: Partial<DetectedAgent> = {}): DetectedAgent {
   };
 }
 
+function makePreview(configFilePath: string, args: string[] = []) {
+  return {
+    configFilePath,
+    before: undefined,
+    after: { command: '/usr/bin/node', args: ['/mock/dist/cli/index.js', ...args] },
+    isNew: true,
+  };
+}
+
 describe('register command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -45,6 +64,7 @@ describe('register command', () => {
   it('should detect and register with installed agents', async () => {
     const agent = makeAgent();
     vi.mocked(detectAgents).mockResolvedValue([agent]);
+    vi.mocked(previewAgentConfig).mockReturnValue(makePreview(agent.configFilePath));
     vi.mocked(mergeAgentConfig).mockResolvedValue(undefined);
 
     await registerCommand({});
@@ -68,6 +88,7 @@ describe('register command', () => {
     });
 
     vi.mocked(detectAgents).mockResolvedValue([cursor, vscode]);
+    vi.mocked(previewAgentConfig).mockReturnValue(makePreview(cursor.configFilePath));
     vi.mocked(mergeAgentConfig).mockResolvedValue(undefined);
 
     await registerCommand({ agentName: 'cursor' });
@@ -82,6 +103,9 @@ describe('register command', () => {
   it('should add project args for project-scoped registration', async () => {
     const agent = makeAgent();
     vi.mocked(detectAgents).mockResolvedValue([agent]);
+    vi.mocked(previewAgentConfig).mockReturnValue(
+      makePreview(agent.configFilePath, ['--project', 'my-project']),
+    );
     vi.mocked(mergeAgentConfig).mockResolvedValue(undefined);
 
     await registerCommand({ projectName: 'my-project' });
@@ -103,6 +127,7 @@ describe('register command', () => {
   it('should handle merge failures gracefully', async () => {
     const agent = makeAgent();
     vi.mocked(detectAgents).mockResolvedValue([agent]);
+    vi.mocked(previewAgentConfig).mockReturnValue(makePreview(agent.configFilePath));
     vi.mocked(mergeAgentConfig).mockRejectedValue(new Error('Permission denied'));
 
     // Should not throw

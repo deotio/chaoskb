@@ -1,6 +1,15 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { validateConfigPath } from './path-validator.js';
+
+// Resolve the MCP server script path relative to this file at build time.
+// config-merger lives at dist/cli/agent-registry/, MCP entry is at dist/cli/index.js
+export const MCP_SCRIPT_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'index.js',
+);
 
 interface McpServerEntry {
   command: string;
@@ -49,6 +58,26 @@ function writeConfig(configFilePath: string, config: McpConfig): void {
   });
 }
 
+export interface ConfigPreview {
+  configFilePath: string;
+  before: McpServerEntry | undefined;
+  after: McpServerEntry;
+  isNew: boolean;
+}
+
+/**
+ * Preview what mergeAgentConfig would write, without actually writing anything.
+ */
+export function previewAgentConfig(configFilePath: string, args: string[] = []): ConfigPreview {
+  const { config } = readConfig(configFilePath);
+  const before = config.mcpServers?.chaoskb;
+  const after: McpServerEntry = {
+    command: process.execPath,
+    args: [MCP_SCRIPT_PATH, ...args],
+  };
+  return { configFilePath, before, after, isNew: before === undefined };
+}
+
 /**
  * Add or update the ChaosKB MCP server entry in an agent's config file.
  * Preserves all other entries in the config.
@@ -67,10 +96,12 @@ export async function mergeAgentConfig(
     config.mcpServers = {};
   }
 
-  // Add/update chaoskb entry
+  // Add/update chaoskb entry.
+  // Use the absolute node binary path + script path to avoid picking up the wrong
+  // Node.js version from PATH (e.g. Claude Desktop may inject old NVM paths first).
   config.mcpServers.chaoskb = {
-    command: 'chaoskb-mcp',
-    args,
+    command: process.execPath,
+    args: [MCP_SCRIPT_PATH, ...args],
   };
 
   writeConfig(configFilePath, config);

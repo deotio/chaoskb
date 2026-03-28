@@ -9,6 +9,26 @@ chaoskb-mcp register                    # detect and register with all installed
 chaoskb-mcp register --agent cursor     # register with a specific agent
 ```
 
+Registration is interactive. For each detected agent, it shows exactly what it will write to the config file and asks for confirmation before making any changes:
+
+```
+  Add to Claude Code config:
+    /Users/you/.claude/settings.json
+
+  + {
+  +   "chaoskb": {
+  +     "command": "/usr/local/bin/node",
+  +     "args": ["/usr/local/lib/node_modules/@deotio/chaoskb-client/dist/cli/index.js"]
+  +   }
+  + }
+
+  Proceed? [y/N]
+```
+
+If an agent is already registered and you re-run `register`, it shows a diff of what would change. Press `y` to confirm or `n` to skip that agent.
+
+At the end, the command also prints the exact config snippet to paste manually if needed.
+
 ## Supported agents
 
 | Agent | Config file (macOS) |
@@ -24,28 +44,31 @@ Config paths vary by platform. Run `chaoskb-mcp register` to have the paths dete
 
 ## Manual registration
 
-If auto-registration doesn't work for your agent, add this to your agent's MCP config:
+Run `chaoskb-mcp register` and copy the snippet printed at the end — it contains the exact absolute paths for your installation. Paste it into your agent's MCP config file.
+
+The snippet looks like:
 
 ```json
 {
   "mcpServers": {
     "chaoskb": {
-      "command": "chaoskb-mcp",
-      "args": [],
-      "env": {}
+      "command": "/usr/local/bin/node",
+      "args": ["/usr/local/lib/node_modules/@deotio/chaoskb-client/dist/cli/index.js"]
     }
   }
 }
 ```
 
-If you've configured server sync, you can optionally include the endpoint in the env block:
+The exact paths will match your system. Using absolute paths avoids issues with `PATH` differences between your shell and the agent process.
+
+If you've configured server sync, you can optionally include the endpoint in an `env` block:
 
 ```json
 {
   "mcpServers": {
     "chaoskb": {
-      "command": "chaoskb-mcp",
-      "args": [],
+      "command": "/usr/local/bin/node",
+      "args": ["/usr/local/lib/node_modules/@deotio/chaoskb-client/dist/cli/index.js"],
       "env": {
         "CHAOSKB_ENDPOINT": "https://your-endpoint.lambda-url.us-east-1.on.aws"
       }
@@ -76,6 +99,36 @@ After registration, restart your chat agent and ask:
 
 The agent should list `kb_ingest`, `kb_query`, `kb_list`, `kb_delete`, and `kb_summary`.
 
+You can also check which agents have ChaosKB registered:
+
+```bash
+chaoskb-mcp status
+```
+
 ## Multiple agents
 
 ChaosKB can be registered with multiple agents simultaneously. They all share the same local database and encryption keys. Only one agent can run `chaoskb-mcp` at a time — if you switch agents, close the first one before opening the second.
+
+## Removing registration
+
+To remove ChaosKB from all agent configs without deleting your data:
+
+```bash
+chaoskb-mcp unregister
+```
+
+To remove ChaosKB entirely — agent registrations and all local data:
+
+```bash
+chaoskb-mcp uninstall
+```
+
+`uninstall` is interactive. It shows exactly what will be deleted (which agent config files will be modified and the `~/.chaoskb/` data directory) and asks for confirmation before proceeding.
+
+## Getting help
+
+```bash
+chaoskb-mcp help                   # list all commands
+chaoskb-mcp --help                 # same
+chaoskb-mcp <command> --help       # help for a specific command
+```

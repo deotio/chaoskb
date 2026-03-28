@@ -1,6 +1,42 @@
+import * as readline from 'node:readline';
 import { detectAgents } from '../agent-registry/detector.js';
-import { mergeAgentConfig, removeAgentConfig } from '../agent-registry/config-merger.js';
+import {
+  mergeAgentConfig,
+  previewAgentConfig,
+  removeAgentConfig,
+  MCP_SCRIPT_PATH,
+} from '../agent-registry/config-merger.js';
 import type { DetectedAgent } from '../agent-registry/types.js';
+
+function prompt(question: string): Promise<boolean> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase() === 'y');
+    });
+  });
+}
+
+function formatEntry(entry: { command: string; args: string[] }): string[] {
+  return JSON.stringify({ chaoskb: entry }, null, 2)
+    .split('\n')
+    .map((line) => `    ${line}`);
+}
+
+function printDiff(
+  before: { command: string; args: string[] } | undefined,
+  after: { command: string; args: string[] },
+): void {
+  if (before) {
+    for (const line of formatEntry(before)) {
+      console.log(`  - ${line}`);
+    }
+  }
+  for (const line of formatEntry(after)) {
+    console.log(`  + ${line}`);
+  }
+}
 
 export interface RegisterOptions {
   agentName?: string;
@@ -71,14 +107,31 @@ export async function registerCommand(options: RegisterOptions): Promise<void> {
         args.push('--project', options.projectName);
       }
 
+      const preview = previewAgentConfig(agent.configFilePath, args);
+      const action = preview.isNew ? 'Add to' : 'Update';
+
+      console.log(`  ${action} ${agent.config.displayName} config:`);
+      console.log(`    ${preview.configFilePath}`);
+      console.log('');
+      printDiff(preview.before, preview.after);
+      console.log('');
+
+      const confirmed = await prompt('  Proceed? [y/N] ');
+      if (!confirmed) {
+        console.log('  Skipped.');
+        console.log('');
+        continue;
+      }
+
       await mergeAgentConfig(agent.configFilePath, args);
       registered.push(agent.config.displayName);
-      console.log(`  Registered with ${agent.config.displayName}`);
-      console.log(`    Config: ${agent.configFilePath}`);
+      console.log(`  Done.`);
+      console.log('');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       failed.push(`${agent.config.displayName}: ${message}`);
       console.log(`  Failed to register with ${agent.config.displayName}: ${message}`);
+      console.log('');
     }
   }
 
@@ -97,6 +150,26 @@ export async function registerCommand(options: RegisterOptions): Promise<void> {
   }
   if (options.projectName) {
     console.log(`  Project: ${options.projectName}`);
+  }
+
+  // Print manual config snippet for project-level MCP config files
+  const manualArgs: string[] = [MCP_SCRIPT_PATH];
+  if (options.projectName) {
+    manualArgs.push('--project', options.projectName);
+  }
+  const manualEntry = {
+    mcpServers: {
+      chaoskb: {
+        command: process.execPath,
+        args: manualArgs,
+      },
+    },
+  };
+  console.log('  To add manually to a project MCP config file:');
+  console.log('');
+  const lines = JSON.stringify(manualEntry, null, 2).split('\n');
+  for (const line of lines) {
+    console.log(`  ${line}`);
   }
   console.log('');
 }
