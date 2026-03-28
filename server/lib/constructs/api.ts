@@ -26,7 +26,7 @@ export class Api extends Construct {
     });
 
     this.handler = new NodejsFunction(this, 'Handler', {
-      runtime: Runtime.NODEJS_20_X,
+      runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '..', 'handler', 'index.ts'),
       handler: 'handler',
@@ -43,7 +43,7 @@ export class Api extends Construct {
       bundling: {
         minify: true,
         sourceMap: true,
-        target: 'node20',
+        target: 'node22',
         format: undefined, // default cjs for Lambda
       },
     });

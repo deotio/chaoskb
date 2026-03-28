@@ -21,7 +21,7 @@ describe('AdminApi construct', () => {
     const template = createTemplate();
 
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Runtime: 'nodejs20.x',
+      Runtime: 'nodejs22.x',
       MemorySize: 256,
       Timeout: 30,
     });

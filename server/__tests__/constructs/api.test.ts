@@ -20,11 +20,11 @@ describe('Api construct', () => {
     return Template.fromStack(stack);
   }
 
-  it('should create a Lambda function with Node.js 20 runtime', () => {
+  it('should create a Lambda function with Node.js 22 runtime', () => {
     const template = createTemplate();
 
     template.hasResourceProperties('AWS::Lambda::Function', {
-      Runtime: 'nodejs20.x',
+      Runtime: 'nodejs22.x',
       MemorySize: 256,
       Timeout: 30,
     });
