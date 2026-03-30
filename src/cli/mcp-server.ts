@@ -239,7 +239,7 @@ export async function startMcpServer(options: McpServerOptions): Promise<void> {
 
 async function initializeDependencies(
   options: McpServerOptions,
-  _config: ChaosKBConfig,
+  config: ChaosKBConfig,
 ): Promise<McpDependencies> {
   // Dynamic imports to keep startup fast when running in CLI mode
   const { KeyringService } = await import('../crypto/keyring.js');
@@ -260,18 +260,23 @@ async function initializeDependencies(
     );
     masterKey = encryption.generateMasterKey();
   } else {
-    const keyring = new KeyringService();
-    masterKey = await keyring.retrieve('chaoskb', 'master-key');
-    if (!masterKey && process.env.CHAOSKB_KEY_STORAGE === 'file') {
-      // File-based key fallback
-      const { FILE_KEY_PATH } = await import('./bootstrap.js');
-      const fs = await import('node:fs');
-      try {
-        const hex = fs.readFileSync(FILE_KEY_PATH, 'utf-8').trim();
-        const { SecureBuffer } = await import('../crypto/secure-buffer.js');
-        masterKey = SecureBuffer.from(Buffer.from(hex, 'hex'));
-      } catch {
-        // Fall through to the error below
+    if (config.securityTier === 'maximum') {
+      // Maximum tier: decrypt master key from passphrase-wrapped blob
+      masterKey = await unlockMaximumTierKey();
+    } else {
+      const keyring = new KeyringService();
+      masterKey = await keyring.retrieve('chaoskb', 'master-key');
+      if (!masterKey && process.env.CHAOSKB_KEY_STORAGE === 'file') {
+        // File-based key fallback
+        const { FILE_KEY_PATH } = await import('./bootstrap.js');
+        const fs = await import('node:fs');
+        try {
+          const hex = fs.readFileSync(FILE_KEY_PATH, 'utf-8').trim();
+          const { SecureBuffer } = await import('../crypto/secure-buffer.js');
+          masterKey = SecureBuffer.from(Buffer.from(hex, 'hex'));
+        } catch {
+          // Fall through to the error below
+        }
       }
     }
     if (!masterKey) {
@@ -319,6 +324,82 @@ async function initializeDependencies(
   );
 
   return { db, dbManager, pipeline, encryption, keys };
+}
+
+/**
+ * Unlock the master key for maximum security tier.
+ *
+ * Reads the encrypted key blob from ~/.chaoskb/master-key.enc,
+ * prompts for the passphrase on stderr, derives the wrapping key
+ * with Argon2id, and decrypts with XChaCha20-Poly1305.
+ *
+ * MCP servers communicate over stdin/stdout (JSON-RPC), so the
+ * passphrase prompt goes to stderr. This only works when stderr
+ * is a TTY (i.e. the agent spawned the process with a PTY).
+ * In non-TTY environments, maximum tier cannot unlock.
+ */
+async function unlockMaximumTierKey(): Promise<import('../crypto/types.js').ISecureBuffer> {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { CHAOSKB_DIR } = await import('./bootstrap.js');
+  const blobPath = path.join(CHAOSKB_DIR, 'master-key.enc');
+
+  let blobJson: string;
+  try {
+    blobJson = fs.readFileSync(blobPath, 'utf-8');
+  } catch {
+    throw new Error(
+      `Maximum tier key blob not found at ${blobPath}. ` +
+      'Re-run `chaoskb-mcp config upgrade-tier maximum` or reinstall.',
+    );
+  }
+
+  const blob = JSON.parse(blobJson) as {
+    v: number; kdf: string; t: number; m: number; p: number;
+    salt: string; nonce: string; ciphertext: string;
+  };
+
+  if (blob.v !== 1 || blob.kdf !== 'argon2id') {
+    throw new Error(`Unsupported key blob format: v=${blob.v}, kdf=${blob.kdf}`);
+  }
+
+  // Prompt for passphrase on stderr (stdout is reserved for MCP JSON-RPC)
+  const readline = await import('node:readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+  const passphrase = await new Promise<string>((resolve) => {
+    rl.question('Enter your ChaosKB passphrase: ', (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+
+  // Derive wrapping key
+  const { argon2Derive } = await import('../crypto/index.js');
+  const salt = Buffer.from(blob.salt, 'hex');
+  const wrappingKey = argon2Derive(passphrase, salt);
+
+  try {
+    // Decrypt master key
+    const { aeadDecrypt } = await import('../crypto/aead.js');
+    const nonce = new Uint8Array(Buffer.from(blob.nonce, 'hex'));
+    const ctAndTag = Buffer.from(blob.ciphertext, 'hex');
+    // XChaCha20-Poly1305 tag is last 16 bytes
+    const ciphertext = new Uint8Array(ctAndTag.subarray(0, ctAndTag.length - 16));
+    const tag = new Uint8Array(ctAndTag.subarray(ctAndTag.length - 16));
+    const aad = Buffer.from('chaoskb-master-key-wrap-v1');
+
+    let plaintext: Uint8Array;
+    try {
+      plaintext = aeadDecrypt(wrappingKey.buffer, nonce, ciphertext, tag, aad);
+    } catch {
+      throw new Error('Incorrect passphrase.');
+    }
+
+    const { SecureBuffer } = await import('../crypto/secure-buffer.js');
+    return SecureBuffer.from(Buffer.from(plaintext));
+  } finally {
+    wrappingKey.dispose();
+  }
 }
 
 /** ChaosKB configuration file shape */

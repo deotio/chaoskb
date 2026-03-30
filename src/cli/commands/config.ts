@@ -149,9 +149,9 @@ async function upgradeToMaximum(
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   let passphrase: string;
   try {
-    passphrase = await prompt(rl, 'Enter new passphrase (min 8 characters): ');
-    if (passphrase.length < 8) {
-      console.error('Passphrase must be at least 8 characters.');
+    passphrase = await prompt(rl, 'Enter new passphrase (min 25 characters): ');
+    if (passphrase.length < 25) {
+      console.error('Passphrase must be at least 25 characters (e.g. 5+ diceware words).');
       process.exitCode = 1;
       return;
     }
@@ -203,10 +203,30 @@ async function upgradeToMaximum(
     };
 
     const blobPath = path.join(CHAOSKB_DIR, 'master-key.enc');
-    // Step 7: write new protection BEFORE removing old
+    // Write new protection BEFORE removing old
     fs.writeFileSync(blobPath, JSON.stringify(blob, null, 2), { mode: 0o600 });
 
-    // Step 8: remove master key from OS keyring
+    // Round-trip verification: decrypt the blob we just wrote to ensure it's valid
+    const { aeadDecrypt } = await import('../../crypto/aead.js');
+    try {
+      const verifyNonce = new Uint8Array(Buffer.from(blob.nonce, 'hex'));
+      const verifyCt = Buffer.from(blob.ciphertext, 'hex');
+      const verifyCiphertext = new Uint8Array(verifyCt.subarray(0, verifyCt.length - 16));
+      const verifyTag = new Uint8Array(verifyCt.subarray(verifyCt.length - 16));
+      const recovered = aeadDecrypt(wrappingKey.buffer, verifyNonce, verifyCiphertext, verifyTag, aad);
+      if (!Buffer.from(recovered).equals(masterKey.buffer)) {
+        throw new Error('Round-trip verification failed: decrypted key does not match original');
+      }
+    } catch (err) {
+      // Verification failed — remove the corrupt blob and abort
+      try { fs.unlinkSync(blobPath); } catch { /* ignore */ }
+      throw new Error(
+        `Key encryption verification failed. Keyring entry NOT removed. ` +
+        `Error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    // Verification passed — safe to remove master key from OS keyring
     const { KeyringService } = await import('../../crypto/keyring.js');
     const keyring = new KeyringService();
     await keyring.delete('chaoskb', 'master-key');
