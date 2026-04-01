@@ -1,11 +1,11 @@
 {
-  "name": "@deotio/chaoskb-server",
+  "name": "@de-otio/chaoskb-server",
   "version": "0.2.0",
   "description": "ChaosKB server - CDK construct library for the hosted backend",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/deotio/chaoskb.git",
+    "url": "https://github.com/de-otio/chaoskb.git",
     "directory": "server"
   },
   "keywords": [

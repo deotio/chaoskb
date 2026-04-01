@@ -3,8 +3,8 @@
 Last updated: 2026-03-26
 
 Two npm packages to publish:
-- `@deotio/chaoskb-client` (src/) — CLI + MCP server for end users
-- `@deotio/chaoskb-server` (server/) — CDK construct library consumed by chaoskb-internal and self-hosters
+- `@de-otio/chaoskb-client` (src/) — CLI + MCP server for end users
+- `@de-otio/chaoskb-server` (server/) — CDK construct library consumed by chaoskb-internal and self-hosters
 
 ---
 
@@ -14,7 +14,7 @@ Two npm packages to publish:
 
 - [ ] Add `prepublishOnly` script: `"npm run build"` to ensure `dist/` is fresh
 - [ ] Add `prepack` script: `"chmod +x dist/cli/index.js"` to set executable permission on the binary
-- [ ] Add `publishConfig`: `{ "access": "public" }` (required for scoped `@deotio` packages on public npm)
+- [ ] Add `publishConfig`: `{ "access": "public" }` (required for scoped `@de-otio` packages on public npm)
 - [ ] Verify the shebang (`#!/usr/bin/env node`) is present in `dist/cli/index.js`
 - [ ] Verify `dist/cli/index.d.ts` exists (TypeScript consumers need it)
 
@@ -67,13 +67,13 @@ If bundling: add `"pipeline/vocab.txt"` to `files` in `src/package.json` and upd
 **Client:**
 - [ ] `cd src && npm pack` and inspect the tarball
 - [ ] `npm publish --dry-run` to verify it would succeed
-- [ ] Install the tarball in a temp directory: `npm install ./deotio-chaoskb-client-0.1.0.tgz`
+- [ ] Install the tarball in a temp directory: `npm install ./de-otio-chaoskb-client-0.1.0.tgz`
 - [ ] Run `npx chaoskb-mcp --version` from the installed package
 
 **Server:**
 - [ ] `cd server && npm pack` and inspect the tarball
 - [ ] `npm publish --dry-run` to verify it would succeed
-- [ ] Install in a temp CDK project: `npm install ./deotio-chaoskb-server-0.1.0.tgz`
+- [ ] Install in a temp CDK project: `npm install ./de-otio-chaoskb-server-0.1.0.tgz`
 - [ ] Import and instantiate `ChaosKBStack` in a minimal CDK app — verify it synthesizes
 
 ---
@@ -87,24 +87,24 @@ If bundling: add `"pipeline/vocab.txt"` to `files` in `src/package.json` and upd
 - [ ] Remove references to Rust binary (`chaoskb-mcp` as "self-contained Rust binary")
 - [ ] Update Clients section to describe the npm package:
   ```
-  - **Desktop** — `@deotio/chaoskb-client`, an npm package that runs as an MCP server
+  - **Desktop** — `@de-otio/chaoskb-client`, an npm package that runs as an MCP server
   ```
 - [ ] Add install instructions:
   ```bash
-  npm install -g @deotio/chaoskb-client
+  npm install -g @de-otio/chaoskb-client
   chaoskb-mcp setup
   ```
 - [ ] Remove or update any references to `brew install` or `cargo install`
 - [ ] Update self-hosting section to reference the server package:
   ```bash
-  npm install @deotio/chaoskb-server
+  npm install @de-otio/chaoskb-server
   ```
 
 ### 2.2 — Update getting-started guide
 
 **File:** `doc/user/getting-started.md`
 
-- [ ] Ensure install steps reference `npm install -g @deotio/chaoskb-client`
+- [ ] Ensure install steps reference `npm install -g @de-otio/chaoskb-client`
 - [ ] Verify the setup walkthrough matches current `chaoskb-mcp setup` behavior
 
 ---

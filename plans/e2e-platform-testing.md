@@ -6,7 +6,7 @@ Last updated: 2026-03-27 (implemented)
 
 ## Overview
 
-The client package (`@deotio/chaoskb-client`) ships three native modules that compile platform-specific binaries:
+The client package (`@de-otio/chaoskb-client`) ships three native modules that compile platform-specific binaries:
 
 - **`sodium-native`** — Argon2id key derivation and XChaCha20 encryption via libsodium
 - **`better-sqlite3`** — SQLite3 storage engine
@@ -121,10 +121,10 @@ The keyring interaction must be bypassed in CI (no OS keyring available). Use an
 
 ### T8 — Packaged install simulation
 
-Simulate what a real user experiences after `npm install -g @deotio/chaoskb-client`.
+Simulate what a real user experiences after `npm install -g @de-otio/chaoskb-client`.
 
-- `npm pack` in `src/` — produces `deotio-chaoskb-client-*.tgz`
-- `npm install -g ./deotio-chaoskb-client-*.tgz` in a temp directory
+- `npm pack` in `src/` — produces `de-otio-chaoskb-client-*.tgz`
+- `npm install -g ./de-otio-chaoskb-client-*.tgz` in a temp directory
 - `chaoskb-mcp --help` — verify the globally installed binary runs
 - `chaoskb-mcp --version` — verify version matches `package.json`
 

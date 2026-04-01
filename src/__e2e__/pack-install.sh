@@ -2,7 +2,7 @@
 #
 # E2E test: Pack & install simulation (T8)
 #
-# Simulates what a real user experiences after `npm install -g @deotio/chaoskb-client`.
+# Simulates what a real user experiences after `npm install -g @de-otio/chaoskb-client`.
 # Runs on POSIX (Linux/macOS).
 #
 # Exit 0 = pass, exit 1 = fail.
@@ -62,7 +62,7 @@ else
 fi
 
 # 3. Run --help (use `script` to fake a TTY — the CLI auto-enters MCP mode when stdin is piped)
-ENTRY_JS="$TEMP_DIR/node_modules/@deotio/chaoskb-client/dist/cli/index.js"
+ENTRY_JS="$TEMP_DIR/node_modules/@de-otio/chaoskb-client/dist/cli/index.js"
 if command -v script >/dev/null 2>&1; then
   if [ "$(uname)" = "Darwin" ]; then
     # macOS script syntax
@@ -100,7 +100,7 @@ else
 fi
 
 # 5. Verify shebang
-ENTRY="$TEMP_DIR/node_modules/@deotio/chaoskb-client/dist/cli/index.js"
+ENTRY="$TEMP_DIR/node_modules/@de-otio/chaoskb-client/dist/cli/index.js"
 if [ -f "$ENTRY" ]; then
   FIRST_LINE=$(head -1 "$ENTRY")
   if [ "$FIRST_LINE" = "#!/usr/bin/env node" ]; then
@@ -113,7 +113,7 @@ else
 fi
 
 # 6. Verify registry.json is included
-REGISTRY="$TEMP_DIR/node_modules/@deotio/chaoskb-client/dist/cli/agent-registry/registry.json"
+REGISTRY="$TEMP_DIR/node_modules/@de-otio/chaoskb-client/dist/cli/agent-registry/registry.json"
 if [ -f "$REGISTRY" ]; then
   pass "registry.json included in package"
 else

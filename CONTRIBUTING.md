@@ -6,7 +6,7 @@ Thanks for your interest in contributing to ChaosKB!
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/deotio/chaoskb.git
+   git clone https://github.com/de-otio/chaoskb.git
    cd chaoskb
    ```
 

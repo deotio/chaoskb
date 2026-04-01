@@ -1,11 +1,11 @@
 {
-  "name": "@deotio/chaoskb-client",
+  "name": "@de-otio/chaoskb-client",
   "version": "0.2.0",
   "description": "ChaosKB - E2E encrypted personal knowledge base with MCP integration",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/deotio/chaoskb.git",
+    "url": "https://github.com/de-otio/chaoskb.git",
     "directory": "src"
   },
   "keywords": [

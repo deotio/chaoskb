@@ -12,14 +12,14 @@ A personal knowledge base for saving and searching web articles. All intelligenc
 ## Install
 
 ```bash
-npm install -g @deotio/chaoskb-client
+npm install -g @de-otio/chaoskb-client
 ```
 
 That's it. On first launch, ChaosKB detects your SSH key, enables sync automatically, and encrypts your data with your public key. No setup commands, no accounts, no configuration.
 
 ## Clients
 
-- **Desktop** — `@deotio/chaoskb-client`, an npm package that runs as an MCP server for any compatible chat agent (Claude Desktop, Claude Code, Cursor, VS Code, etc.)
+- **Desktop** — `@de-otio/chaoskb-client`, an npm package that runs as an MCP server for any compatible chat agent (Claude Desktop, Claude Code, Cursor, VS Code, etc.)
 - **Mobile** (future) — Flutter app for iOS and Android
 
 ## Key properties

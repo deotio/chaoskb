@@ -18,7 +18,7 @@ Registration is interactive. For each detected agent, it shows exactly what it w
   + {
   +   "chaoskb": {
   +     "command": "/usr/local/bin/node",
-  +     "args": ["/usr/local/lib/node_modules/@deotio/chaoskb-client/dist/cli/index.js"]
+  +     "args": ["/usr/local/lib/node_modules/@de-otio/chaoskb-client/dist/cli/index.js"]
   +   }
   + }
 
@@ -53,7 +53,7 @@ The snippet looks like:
   "mcpServers": {
     "chaoskb": {
       "command": "/usr/local/bin/node",
-      "args": ["/usr/local/lib/node_modules/@deotio/chaoskb-client/dist/cli/index.js"]
+      "args": ["/usr/local/lib/node_modules/@de-otio/chaoskb-client/dist/cli/index.js"]
     }
   }
 }
@@ -68,7 +68,7 @@ If you've configured server sync, you can optionally include the endpoint in an 
   "mcpServers": {
     "chaoskb": {
       "command": "/usr/local/bin/node",
-      "args": ["/usr/local/lib/node_modules/@deotio/chaoskb-client/dist/cli/index.js"],
+      "args": ["/usr/local/lib/node_modules/@de-otio/chaoskb-client/dist/cli/index.js"],
       "env": {
         "CHAOSKB_ENDPOINT": "https://your-endpoint.lambda-url.us-east-1.on.aws"
       }

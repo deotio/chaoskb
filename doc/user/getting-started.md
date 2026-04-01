@@ -5,7 +5,7 @@ Install ChaosKB and save your first article in under 5 minutes.
 ## Install
 
 ```bash
-npm install -g @deotio/chaoskb-client
+npm install -g @de-otio/chaoskb-client
 ```
 
 Then set up and register with your chat agents:

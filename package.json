@@ -1,11 +1,11 @@
 {
-  "name": "@deotio/chaoskb",
+  "name": "@de-otio/chaoskb",
   "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/deotio/chaoskb.git"
+    "url": "https://github.com/de-otio/chaoskb.git"
   },
   "workspaces": [
     "src",

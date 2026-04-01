@@ -1,7 +1,7 @@
 #
 # E2E test: Pack & install simulation (T8) — Windows variant
 #
-# Simulates what a real user experiences after `npm install -g @deotio/chaoskb-client`.
+# Simulates what a real user experiences after `npm install -g @de-otio/chaoskb-client`.
 #
 # Exit 0 = pass, exit 1 = fail.
 
@@ -58,7 +58,7 @@ try {
 
     # Note: The CLI enters MCP server mode when stdin is not a TTY.
     # On Windows in CI, use cmd /c to get a pseudo-TTY environment.
-    $entryJs = Join-Path $TempDir "node_modules\@deotio\chaoskb-client\dist\cli\index.js"
+    $entryJs = Join-Path $TempDir "node_modules\@de-otio\chaoskb-client\dist\cli\index.js"
 
     # 3. Run --help
     try {
@@ -88,7 +88,7 @@ try {
     }
 
     # 5. Verify registry.json is included
-    $registryPath = Join-Path $TempDir "node_modules\@deotio\chaoskb-client\dist\cli\agent-registry\registry.json"
+    $registryPath = Join-Path $TempDir "node_modules\@de-otio\chaoskb-client\dist\cli\agent-registry\registry.json"
     if (Test-Path $registryPath) {
         Pass "registry.json included in package"
     } else {
