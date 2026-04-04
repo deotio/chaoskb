@@ -47,8 +47,7 @@ export async function handleRestore(
     new UpdateCommand({
       TableName: tableName,
       Key: { PK: `TENANT#${tenantId}`, SK: `BLOB#${blobId}` },
-      UpdateExpression: 'REMOVE deletedAt, #ttl SET updatedAt = :updatedAt',
-      ExpressionAttributeNames: { '#ttl': 'ttl' },
+      UpdateExpression: 'REMOVE deletedAt, expiresAt SET updatedAt = :updatedAt',
       ExpressionAttributeValues: { ':updatedAt': now },
     }),
   );

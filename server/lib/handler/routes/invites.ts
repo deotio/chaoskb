@@ -48,15 +48,14 @@ async function checkInviteRateLimit(
         PK: `RATE#INVITE#${senderFingerprint}`,
         SK: `HOUR#${hourWindow}`,
       },
-      UpdateExpression: 'SET #count = if_not_exists(#count, :zero) + :one, #ttl = :ttl',
+      UpdateExpression: 'SET #count = if_not_exists(#count, :zero) + :one, expiresAt = :expiresAt',
       ExpressionAttributeNames: {
         '#count': 'count',
-        '#ttl': 'ttl',
       },
       ExpressionAttributeValues: {
         ':zero': 0,
         ':one': 1,
-        ':ttl': hourWindow * HOUR_SECONDS + HOUR_SECONDS + 120,
+        ':expiresAt': hourWindow * HOUR_SECONDS + HOUR_SECONDS + 120,
       },
       ReturnValues: 'UPDATED_NEW',
     }),
@@ -75,15 +74,14 @@ async function checkInviteRateLimit(
         PK: `RATE#INVITE#${senderFingerprint}`,
         SK: `DAY#${dayWindow}`,
       },
-      UpdateExpression: 'SET #count = if_not_exists(#count, :zero) + :one, #ttl = :ttl',
+      UpdateExpression: 'SET #count = if_not_exists(#count, :zero) + :one, expiresAt = :expiresAt',
       ExpressionAttributeNames: {
         '#count': 'count',
-        '#ttl': 'ttl',
       },
       ExpressionAttributeValues: {
         ':zero': 0,
         ':one': 1,
-        ':ttl': dayWindow * DAY_SECONDS + DAY_SECONDS + 120,
+        ':expiresAt': dayWindow * DAY_SECONDS + DAY_SECONDS + 120,
       },
       ReturnValues: 'UPDATED_NEW',
     }),
@@ -384,15 +382,14 @@ export async function handleAcceptInvite(
         PK: `INVITE#${inviteId}`,
         SK: 'META',
       },
-      UpdateExpression: 'SET #status = :accepted, acceptedAt = :acceptedAt, #ttl = :ttl',
+      UpdateExpression: 'SET #status = :accepted, acceptedAt = :acceptedAt, expiresAt = :expiresAt',
       ExpressionAttributeNames: {
         '#status': 'status',
-        '#ttl': 'ttl',
       },
       ExpressionAttributeValues: {
         ':accepted': 'accepted',
         ':acceptedAt': acceptedAt,
-        ':ttl': cleanupTtl,
+        ':expiresAt': cleanupTtl,
       },
     }),
   );

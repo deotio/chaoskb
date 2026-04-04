@@ -19,7 +19,7 @@ export class BlobStore extends Construct {
       billing: Billing.onDemand(),
       pointInTimeRecovery: true,
       removalPolicy: RemovalPolicy.RETAIN,
-      timeToLiveAttribute: 'ttl',
+      timeToLiveAttribute: 'expiresAt',
       globalSecondaryIndexes: [
         {
           indexName: 'updatedAt-index',

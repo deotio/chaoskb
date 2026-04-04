@@ -215,11 +215,10 @@ export async function handleDeleteBlob(
     new UpdateCommand({
       TableName: tableName,
       Key: { PK: `TENANT#${tenantId}`, SK: `BLOB#${blobId}` },
-      UpdateExpression: 'SET deletedAt = :deletedAt, #ttl = :ttl, updatedAt = :updatedAt',
-      ExpressionAttributeNames: { '#ttl': 'ttl' },
+      UpdateExpression: 'SET deletedAt = :deletedAt, expiresAt = :expiresAt, updatedAt = :updatedAt',
       ExpressionAttributeValues: {
         ':deletedAt': now,
-        ':ttl': ttlEpoch,
+        ':expiresAt': ttlEpoch,
         ':updatedAt': now,
       },
     }),
