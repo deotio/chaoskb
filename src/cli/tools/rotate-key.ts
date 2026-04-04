@@ -1,5 +1,3 @@
-import { createSyncClient } from './sync-client.js';
-
 export interface RotateKeyInput {
   newKeyPath?: string;
 }

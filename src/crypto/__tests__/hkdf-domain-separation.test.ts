@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 
 /**
@@ -54,7 +55,6 @@ describe('HKDF domain separation', () => {
   it('invite info uses fixed-width SHA-256 fields (32 bytes each)', () => {
     // The invite HKDF info appends three SHA-256 hex digests (64 chars each)
     // after the "chaoskb-invite-v1" prefix, totaling 17 + 192 = 209 chars
-    const crypto = require('node:crypto');
     const prefix = 'chaoskb-invite-v1';
     const hash = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
     const info = `${prefix}${hash('sender')}${hash('recipient')}${hash('project')}`;

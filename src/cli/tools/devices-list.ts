@@ -1,8 +1,6 @@
 import { createSyncClient } from './sync-client.js';
 
-export interface DevicesListInput {
-  // No required inputs
-}
+export type DevicesListInput = Record<string, never>;
 
 interface DeviceInfo {
   fingerprint: string;

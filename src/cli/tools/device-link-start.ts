@@ -12,9 +12,7 @@ function generateLinkCode(length: number): string {
   return code;
 }
 
-export interface DeviceLinkStartInput {
-  // No required inputs — generates a code automatically
-}
+export type DeviceLinkStartInput = Record<string, never>;
 
 /**
  * MCP tool: device_link_start
