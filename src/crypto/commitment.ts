@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
@@ -32,17 +33,9 @@ export function verifyCommitment(
   return constantTimeEqual(computed, expected);
 }
 
-/**
- * Constant-time comparison of two byte arrays.
- * Always compares the full length to prevent timing side-channels.
- */
 function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) {
     return false;
   }
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a[i] ^ b[i];
-  }
-  return diff === 0;
+  return crypto.timingSafeEqual(a, b);
 }

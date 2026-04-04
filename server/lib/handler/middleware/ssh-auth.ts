@@ -253,7 +253,9 @@ export async function authenticateRequest(
   }
 
   const tenant = result.Items[0];
-  if (tenant['publicKey'] !== publicKey) {
+  const storedKey = Buffer.from(tenant['publicKey'] as string);
+  const suppliedKey = Buffer.from(publicKey);
+  if (storedKey.length !== suppliedKey.length || !crypto.timingSafeEqual(storedKey, suppliedKey)) {
     throw new AuthError('Public key mismatch', 401);
   }
 

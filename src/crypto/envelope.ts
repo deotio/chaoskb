@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import { aeadDecrypt, aeadEncrypt } from './aead.js';
 import { constructAAD } from './aad.js';
 import { generateBlobId } from './blob-id.js';
@@ -189,14 +190,9 @@ export function decryptEnvelope(envelope: Envelope, keys: DerivedKeySet): Decryp
   return { payload, envelope };
 }
 
-/** Constant-time comparison of two byte arrays. */
 function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) {
     return false;
   }
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a[i] ^ b[i];
-  }
-  return diff === 0;
+  return crypto.timingSafeEqual(a, b);
 }

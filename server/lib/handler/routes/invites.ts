@@ -330,8 +330,10 @@ export async function handleAcceptInvite(
 
   const invite = result.Item;
 
-  // Check recipient matches
-  if (invite['recipientFingerprint'] !== fingerprint) {
+  // Check recipient matches (constant-time to prevent fingerprint probing)
+  const storedFp = Buffer.from(invite['recipientFingerprint'] as string);
+  const suppliedFp = Buffer.from(fingerprint);
+  if (storedFp.length !== suppliedFp.length || !crypto.timingSafeEqual(storedFp, suppliedFp)) {
     return {
       statusCode: 403,
       headers: JSON_HEADERS,

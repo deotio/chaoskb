@@ -112,6 +112,8 @@ export function openInviteBlob(
   const padded = aeadDecrypt(encryptionKey, nonce, ciphertext, tag, emptyAAD);
 
   // Zero sensitive buffers
+  const skBuf = Buffer.from(recipientX25519Sk);
+  skBuf.fill(0);
   sharedSecret.fill(0);
   encryptionKey.fill(0);
 

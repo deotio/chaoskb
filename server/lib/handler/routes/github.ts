@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { DynamoDBDocumentClient, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { logger } from '../logger.js';
 
@@ -74,12 +75,12 @@ export async function fetchGitHubKeysFresh(username: string): Promise<string[]> 
  * Check whether a public key (base64 blob) appears in a list of GitHub SSH key lines.
  */
 export function keyAppearsInGitHubKeys(publicKeyBase64: string, githubKeys: string[]): boolean {
+  const suppliedBuf = Buffer.from(publicKeyBase64);
   for (const ghKey of githubKeys) {
     const parts = ghKey.split(/\s+/);
-    if (parts.length >= 2 && parts[1] === publicKeyBase64) {
-      return true;
-    }
-    if (ghKey === publicKeyBase64) {
+    const candidate = parts.length >= 2 ? parts[1] : ghKey;
+    const candidateBuf = Buffer.from(candidate);
+    if (suppliedBuf.length === candidateBuf.length && crypto.timingSafeEqual(suppliedBuf, candidateBuf)) {
       return true;
     }
   }

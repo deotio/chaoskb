@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -15,6 +16,13 @@ interface PinnedKey {
 }
 
 type KnownKeysStore = Record<string, PinnedKey>;
+
+function fingerprintsEqual(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
 
 /**
  * Trust on First Use (TOFU) key pinning for invite recipients.
@@ -52,7 +60,7 @@ export function pinKey(
   const store = loadStore();
   const existing = store[identifier];
 
-  if (existing && existing.fingerprint !== fingerprint) {
+  if (existing && !fingerprintsEqual(existing.fingerprint, fingerprint)) {
     throw new KeyMismatchError(
       identifier,
       existing.fingerprint,
@@ -62,7 +70,7 @@ export function pinKey(
     );
   }
 
-  if (existing && existing.fingerprint === fingerprint) {
+  if (existing && fingerprintsEqual(existing.fingerprint, fingerprint)) {
     // Same key — update verifiedAt
     existing.verifiedAt = new Date().toISOString();
     saveStore(store);
@@ -99,7 +107,7 @@ export function checkKeyPin(
   const existing = store[identifier];
 
   if (!existing) return 'new';
-  if (existing.fingerprint === fingerprint) return 'match';
+  if (fingerprintsEqual(existing.fingerprint, fingerprint)) return 'match';
   return 'mismatch';
 }
 

@@ -131,5 +131,6 @@ export function ed25519ToX25519SecretKey(ed25519SecretKey: Uint8Array): Uint8Arr
   const x25519SecretKey = Buffer.alloc(sodium.crypto_box_SECRETKEYBYTES);
   const ed25519Buffer = Buffer.from(ed25519SecretKey);
   sodium.crypto_sign_ed25519_sk_to_curve25519(x25519SecretKey, ed25519Buffer);
+  sodium.sodium_memzero(ed25519Buffer);
   return new Uint8Array(x25519SecretKey);
 }

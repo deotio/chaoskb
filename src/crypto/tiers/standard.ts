@@ -42,15 +42,21 @@ export function unwrapMasterKeyEd25519(
   const x25519Sk = ed25519ToX25519SecretKey(ed25519SecretKey);
   const x25519Pk = ed25519ToX25519PublicKey(ed25519PublicKey);
 
+  const skBuf = Buffer.from(x25519Sk);
+  const pkBuf = Buffer.from(x25519Pk);
   const plaintext = Buffer.alloc(wrappedKey.length - sodium.crypto_box_SEALBYTES);
-  sodium.crypto_box_seal_open(
-    plaintext,
-    Buffer.from(wrappedKey),
-    Buffer.from(x25519Pk),
-    Buffer.from(x25519Sk),
-  );
-
-  return SecureBuffer.from(plaintext);
+  try {
+    sodium.crypto_box_seal_open(
+      plaintext,
+      Buffer.from(wrappedKey),
+      pkBuf,
+      skBuf,
+    );
+    return SecureBuffer.from(plaintext);
+  } finally {
+    sodium.sodium_memzero(skBuf);
+    sodium.sodium_memzero(pkBuf);
+  }
 }
 
 /**
