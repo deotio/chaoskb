@@ -28,7 +28,7 @@ export async function handleRotateKey(input: RotateKeyInput): Promise<{
 
   try {
     await rotateKeyCommand(input.newKeyPath, { dryRun: false });
-    exitCode = process.exitCode ?? 0;
+    exitCode = (process.exitCode as number | undefined) ?? 0;
   } finally {
     console.log = origLog;
     console.error = origError;
