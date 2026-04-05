@@ -3,6 +3,7 @@ import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-
 import { logAuditEvent } from './audit.js';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import { logger } from '../logger.js';
+import { verifySSHSignature } from '../middleware/ssh-auth.js';
 import {
   verifyKeyOnGitHub,
   fetchGitHubKeysFresh,
@@ -79,7 +80,8 @@ function isValidSSHPublicKey(publicKey: string): boolean {
 }
 
 /**
- * Verify an Ed25519 signature of a challenge nonce against a public key.
+ * Verify an SSH signature of a challenge nonce against a public key.
+ * Supports Ed25519, RSA, and ECDSA keys (delegates to verifySSHSignature).
  * The signed data is: "chaoskb-register\n" + nonce (base64).
  */
 function verifyRegistrationSignature(
@@ -87,25 +89,8 @@ function verifyRegistrationSignature(
   nonce: string,
   signatureBase64: string,
 ): boolean {
-  try {
-    const publicKeyBuffer = Buffer.from(publicKeyBase64, 'base64');
-    const signatureBuffer = Buffer.from(signatureBase64, 'base64');
-    const data = Buffer.from(`chaoskb-register\n${nonce}`);
-
-    const keyObject = crypto.createPublicKey({
-      key: Buffer.concat([
-        // Ed25519 DER prefix for a 32-byte public key
-        Buffer.from('302a300506032b6570032100', 'hex'),
-        publicKeyBuffer,
-      ]),
-      format: 'der',
-      type: 'spki',
-    });
-
-    return crypto.verify(null, data, keyObject, signatureBuffer);
-  } catch {
-    return false;
-  }
+  const canonicalString = `chaoskb-register\n${nonce}`;
+  return verifySSHSignature(publicKeyBase64, canonicalString, signatureBase64);
 }
 
 /**
