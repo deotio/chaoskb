@@ -31,8 +31,10 @@ async function main(): Promise<void> {
   // If stdin is a pipe (not TTY) AND no explicit CLI command is given,
   // start MCP server mode. This allows CLI commands to work in non-TTY
   // environments (CI, piped shells, agent terminals).
-  const explicitCommand = process.argv.slice(2).find(arg => !arg.startsWith('-'));
-  if (!process.stdin.isTTY && !explicitCommand) {
+  const args = process.argv.slice(2);
+  const hasCommand = args.some(arg => !arg.startsWith('-'));
+  const hasFlag = args.some(arg => arg === '--version' || arg === '-V' || arg === '--help' || arg === '-h');
+  if (!process.stdin.isTTY && !hasCommand && !hasFlag) {
     const projectFlag = process.argv.find((arg, i) =>
       arg === '--project' && i + 1 < process.argv.length
     );
