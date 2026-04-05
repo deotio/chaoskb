@@ -17,7 +17,7 @@ interface HandlerResponse {
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
+
 const FOURTEEN_DAYS_SECONDS = 14 * 24 * 60 * 60;
 const TWENTY_FOUR_HOURS_SECONDS = 24 * 60 * 60;
 
@@ -212,7 +212,6 @@ export async function handleCreateInvite(
   const inviteId = crypto.randomUUID();
   const now = new Date();
   const createdAt = now.toISOString();
-  const expiresAt = new Date(now.getTime() + FOURTEEN_DAYS_MS).toISOString();
   const ttl = Math.floor(now.getTime() / 1000) + FOURTEEN_DAYS_SECONDS;
 
   await ddb.send(
