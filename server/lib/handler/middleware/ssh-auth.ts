@@ -227,9 +227,20 @@ const DER_NULL = Buffer.from([0x05, 0x00]);
 /**
  * Build a crypto.KeyObject from an SSH public key blob (base64-encoded wire format).
  * Supports ssh-ed25519, ssh-rsa, and ecdsa-sha2-nistp{256,384,521}.
+ * Also accepts raw 32-byte Ed25519 keys for backward compatibility.
  */
 function createPublicKeyFromSSHBlob(publicKeyBase64: string): crypto.KeyObject {
   const blob = Buffer.from(publicKeyBase64, 'base64');
+
+  // Backward compat: raw 32-byte Ed25519 public key (no SSH wire framing)
+  if (blob.length === 32) {
+    const spki = Buffer.concat([
+      Buffer.from('302a300506032b6570032100', 'hex'),
+      blob,
+    ]);
+    return crypto.createPublicKey({ key: spki, format: 'der', type: 'spki' });
+  }
+
   const { data: keyTypeBytes, next: off1 } = readSSHString(blob, 0);
   const keyType = keyTypeBytes.toString('utf-8');
 
