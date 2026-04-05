@@ -81,7 +81,7 @@ export async function handleCreateLinkCode(
   return {
     statusCode: 201,
     headers: JSON_HEADERS,
-    body: JSON.stringify({ status: 'created', expiresAt }),
+    body: JSON.stringify({ status: 'created', expiresAt: expiresAtISO }),
   };
 }
 
