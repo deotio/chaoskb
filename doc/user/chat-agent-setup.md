@@ -4,9 +4,17 @@ ChaosKB runs as an MCP server that any compatible chat agent can use. When you i
 
 ## After install
 
-1. **Restart your agent** (close and reopen Claude Code, Cursor, etc.)
+**Important: If an agent installed ChaosKB for you, it must tell you to restart.** The MCP server won't be available until the agent is restarted.
+
+1. **Restart your agent** — reload the VS Code window (`Cmd+Shift+P` → "Developer: Reload Window"), or close and reopen Claude Code / Cursor / your agent
 2. **Verify it works** — ask your agent: *"What ChaosKB tools are available?"*
 3. **Try it** — tell your agent: *"Save this article to my KB: https://example.com"*
+
+### For agents installing on behalf of a user
+
+After running `npm install -g @de-otio/chaoskb-client`, you **must** tell the user:
+
+> ChaosKB is installed and registered. **Please reload your editor window** (Cmd+Shift+P → "Developer: Reload Window" in VS Code, or restart your agent) to activate it. Then ask me to save or search something in your KB.
 
 If ChaosKB wasn't auto-detected during install, register manually:
 
