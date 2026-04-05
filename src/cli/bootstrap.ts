@@ -288,11 +288,49 @@ async function attemptSyncRegistration(
 
   const endpoint = process.env.CHAOSKB_SYNC_ENDPOINT ?? DEFAULT_SYNC_ENDPOINT;
 
+  // Extract the base64 key blob from the full SSH public key line
+  // e.g., "ssh-ed25519 AAAA... comment" -> "AAAA..."
+  const parts = ssh.publicKey.split(/\s+/);
+  const publicKeyBase64 = parts.length >= 2 ? parts[1] : ssh.publicKey;
+
   try {
+    // Step 1: Fetch a registration challenge
+    const challengeRes = await fetchWithTimeout(`${endpoint}/v1/register/challenge`, {
+      method: 'GET',
+    });
+
+    if (!challengeRes.ok) {
+      return { enabled: false, pending: true, endpoint };
+    }
+
+    const { challenge } = await challengeRes.json() as { challenge: string };
+
+    // Step 2: Sign the challenge with the SSH private key
+    const { createPrivateKey } = await import('node:crypto');
+    const { sign: cryptoSign } = await import('node:crypto');
+    const { readFileSync } = await import('node:fs');
+
+    const signedData = Buffer.from(`chaoskb-register\n${challenge}`);
+    let signedChallenge: string;
+
+    if (ssh.keyPath) {
+      const keyData = readFileSync(ssh.keyPath);
+      const privateKey = createPrivateKey({ key: keyData, format: 'pem' });
+      signedChallenge = cryptoSign(null, signedData, privateKey).toString('base64');
+    } else {
+      // No key file — can't sign. Mark as pending.
+      return { enabled: false, pending: true, endpoint };
+    }
+
+    // Step 3: Register with signed challenge
     const response = await fetchWithTimeout(`${endpoint}/v1/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ publicKey: ssh.publicKey }),
+      body: JSON.stringify({
+        publicKey: publicKeyBase64,
+        signedChallenge,
+        challengeNonce: challenge,
+      }),
     });
 
     if (!response.ok) {
