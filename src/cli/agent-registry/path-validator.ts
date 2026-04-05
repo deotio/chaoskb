@@ -9,7 +9,7 @@ const ALLOWED_PREFIXES = [
   '~/.config/',
   '~/.cursor/',
   '~/Library/Application Support/',
-  '~/.claude.json',
+  '~/.claude/',
   '~/.continue/',
   '~/.codeium/',
   '~/.vscode/',
