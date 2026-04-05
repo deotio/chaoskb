@@ -34,10 +34,12 @@ async function main(): Promise<void> {
   }
 
   if (registered.length > 0) {
-    process.stderr.write(
-      `\n  ChaosKB registered with: ${registered.join(', ')}\n` +
-      `  Restart your agent to activate.\n\n`,
-    );
+    console.log('');
+    console.log(`  ChaosKB registered with: ${registered.join(', ')}`);
+    console.log('');
+    console.log('  Restart your agent to activate. Then try:');
+    console.log('    "Save this article to my KB: https://example.com/article"');
+    console.log('');
   }
 }
 
