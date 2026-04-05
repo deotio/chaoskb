@@ -28,8 +28,11 @@ const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
 
 async function main(): Promise<void> {
-  // If stdin is a pipe (not TTY), start MCP server mode
-  if (!process.stdin.isTTY) {
+  // If stdin is a pipe (not TTY) AND no explicit CLI command is given,
+  // start MCP server mode. This allows CLI commands to work in non-TTY
+  // environments (CI, piped shells, agent terminals).
+  const explicitCommand = process.argv.slice(2).find(arg => !arg.startsWith('-'));
+  if (!process.stdin.isTTY && !explicitCommand) {
     const projectFlag = process.argv.find((arg, i) =>
       arg === '--project' && i + 1 < process.argv.length
     );
@@ -40,7 +43,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  // TTY mode: parse CLI commands with commander
+  // CLI mode: parse commands with commander
   const program = new Command();
 
   program
