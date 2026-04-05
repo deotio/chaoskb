@@ -1,8 +1,9 @@
-import { createHash, createPrivateKey, sign as cryptoSign } from 'node:crypto';
+import { createHash, sign as cryptoSign } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { connect, type Socket } from 'node:net';
+import sshpk from 'sshpk';
 
 /**
  * Signs HTTP requests with an SSH private key for ChaosKB-SSH authentication.
@@ -125,18 +126,20 @@ export class SSHSigner {
 
   /**
    * Sign using the SSH private key file on disk.
-   * Supports Ed25519, RSA, and ECDSA keys in both OpenSSH and PEM formats.
+   * Uses sshpk for key parsing (handles all SSH key formats: OpenSSH, PEM, PKCS8)
+   * and Node's native crypto.sign for the actual signature.
    */
   private async signWithKeyFile(canonical: string): Promise<Buffer> {
     const keyData = await readFile(this.keyPath, 'utf-8');
-    const privateKey = createPrivateKey(keyData);
+    const sshKey = sshpk.parsePrivateKey(keyData, 'auto');
+    const privateKey = sshKey.toBuffer('pkcs8') as Buffer;
+    const keyObject = (await import('node:crypto')).createPrivateKey({ key: privateKey, format: 'pem' });
     const data = Buffer.from(canonical, 'utf-8');
-    // Ed25519/Ed448 infer the algorithm; RSA and ECDSA need an explicit hash
     const algorithm =
-      privateKey.asymmetricKeyType === 'ed25519' || privateKey.asymmetricKeyType === 'ed448'
+      keyObject.asymmetricKeyType === 'ed25519' || keyObject.asymmetricKeyType === 'ed448'
         ? undefined
         : 'sha256';
-    return cryptoSign(algorithm, data, privateKey);
+    return cryptoSign(algorithm, data, keyObject);
   }
 
   /**
@@ -312,3 +315,4 @@ function uint32(n: number): Buffer {
   buf.writeUInt32BE(n);
   return buf;
 }
+

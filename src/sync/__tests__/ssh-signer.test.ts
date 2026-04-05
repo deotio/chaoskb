@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { generateKeyPairSync, createHash } from 'node:crypto';
+import { generateKeyPairSync, createHash, createPublicKey, verify as cryptoVerify } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { SSHSigner } from '../ssh-signer.js';
 
 describe('SSHSigner', () => {
@@ -95,6 +96,185 @@ describe('SSHSigner', () => {
       const { authorization } = await signer.signRequest('PUT', '/v1/blobs/b_test', 2, body);
 
       expect(authorization).toMatch(/^SSH-Signature /);
+    });
+  });
+
+  describe('signRegistrationChallenge', () => {
+    it('should return signature and publicKey as base64 strings', async () => {
+      const signer = new SSHSigner(keyPath);
+      const nonce = 'test-nonce-abc123';
+      const result = await signer.signRegistrationChallenge(nonce);
+
+      expect(result).toHaveProperty('signature');
+      expect(result).toHaveProperty('publicKey');
+      expect(typeof result.signature).toBe('string');
+      expect(typeof result.publicKey).toBe('string');
+      // signature should be valid base64
+      expect(() => Buffer.from(result.signature, 'base64')).not.toThrow();
+      expect(Buffer.from(result.signature, 'base64').length).toBeGreaterThan(0);
+    });
+
+    it('should produce different signatures for different nonces', async () => {
+      const signer = new SSHSigner(keyPath);
+      const result1 = await signer.signRegistrationChallenge('nonce-1');
+      const result2 = await signer.signRegistrationChallenge('nonce-2');
+
+      expect(result1.signature).not.toBe(result2.signature);
+      // Same key, so publicKey should be the same
+      expect(result1.publicKey).toBe(result2.publicKey);
+    });
+  });
+});
+
+/**
+ * Tests for OpenSSH-format private key parsing.
+ *
+ * These tests use `ssh-keygen` to generate keys in native OpenSSH format
+ * (-----BEGIN OPENSSH PRIVATE KEY-----), which forces the parseOpenSSHPrivateKey
+ * fallback path when Node's createPrivateKey cannot handle the format.
+ *
+ * The SSHSigner.signRequest / signRegistrationChallenge methods are used to
+ * exercise the parser indirectly since parseOpenSSHPrivateKey is not exported.
+ */
+describe('SSHSigner with OpenSSH-format keys', () => {
+  const opensshDir = join(tmpdir(), `chaoskb-openssh-test-${Date.now()}`);
+
+  beforeAll(() => {
+    mkdirSync(opensshDir, { recursive: true });
+  });
+
+  afterAll(() => {
+    rmSync(opensshDir, { recursive: true, force: true });
+  });
+
+  describe('Ed25519 OpenSSH key', () => {
+    const ed25519Path = join(opensshDir, 'id_ed25519');
+
+    beforeAll(() => {
+      execSync(`ssh-keygen -t ed25519 -f "${ed25519Path}" -N "" -C "test-ed25519@chaoskb"`, {
+        stdio: 'pipe',
+      });
+    });
+
+    it('should sign and produce valid signature via signRegistrationChallenge', async () => {
+      const signer = new SSHSigner(ed25519Path);
+      const nonce = 'openssh-ed25519-test-nonce';
+      const result = await signer.signRegistrationChallenge(nonce);
+
+      expect(result.signature).toBeTruthy();
+      expect(result.publicKey).toBeTruthy();
+
+      // Verify the signature is valid by loading the public key and checking
+      const pubKeyContent = readFileSync(ed25519Path + '.pub', 'utf-8').trim();
+      const pubKeyBase64 = pubKeyContent.split(/\s+/)[1];
+      expect(result.publicKey).toBe(pubKeyBase64);
+
+      // Reconstruct the signed data and verify with the public key
+      const signedData = Buffer.from(`chaoskb-register\n${nonce}`, 'utf-8');
+      const sigBytes = Buffer.from(result.signature, 'base64');
+
+      // Load the public key from the .pub file for verification
+      // For ed25519, extract the raw 32-byte key from the SSH wire format
+      const keyBlob = Buffer.from(pubKeyBase64, 'base64');
+      // SSH wire format: uint32 len, "ssh-ed25519", uint32 len, <32-byte key>
+      let off = 0;
+      const typeLen = keyBlob.readUInt32BE(off); off += 4 + typeLen;
+      const rawKeyLen = keyBlob.readUInt32BE(off); off += 4;
+      const rawKey = keyBlob.subarray(off, off + rawKeyLen);
+
+      // Build DER-encoded SPKI for ed25519 public key
+      const spkiPrefix = Buffer.from('302a300506032b6570032100', 'hex');
+      const pubKeyObj = createPublicKey({
+        key: Buffer.concat([spkiPrefix, rawKey]),
+        format: 'der',
+        type: 'spki',
+      });
+
+      const valid = cryptoVerify(null, signedData, pubKeyObj, sigBytes);
+      expect(valid).toBe(true);
+    });
+
+    it('should sign requests successfully', async () => {
+      const signer = new SSHSigner(ed25519Path);
+      const result = await signer.signRequest('GET', '/v1/blobs', 1);
+
+      expect(result.authorization).toMatch(/^SSH-Signature .+$/);
+      expect(result.timestamp).toBeTruthy();
+      expect(result.sequence).toBe(1);
+    });
+  });
+
+  describe('RSA OpenSSH key', () => {
+    const rsaPath = join(opensshDir, 'id_rsa');
+
+    beforeAll(() => {
+      execSync(`ssh-keygen -t rsa -b 2048 -f "${rsaPath}" -N "" -C "test-rsa@chaoskb"`, {
+        stdio: 'pipe',
+      });
+    });
+
+    it('should sign and produce valid signature via signRegistrationChallenge', async () => {
+      const signer = new SSHSigner(rsaPath);
+      const nonce = 'openssh-rsa-test-nonce';
+      const result = await signer.signRegistrationChallenge(nonce);
+
+      expect(result.signature).toBeTruthy();
+      expect(result.publicKey).toBeTruthy();
+
+      // Verify the signature with the public key
+      const pubKeyContent = readFileSync(rsaPath + '.pub', 'utf-8').trim();
+      const pubKeyBase64 = pubKeyContent.split(/\s+/)[1];
+      expect(result.publicKey).toBe(pubKeyBase64);
+
+      // Extract RSA public key from SSH wire format and verify
+      const signedData = Buffer.from(`chaoskb-register\n${nonce}`, 'utf-8');
+      const sigBytes = Buffer.from(result.signature, 'base64');
+
+      // Parse the SSH public key blob to extract e and n for RSA
+      const keyBlob = Buffer.from(pubKeyBase64, 'base64');
+      let off = 0;
+      function readSSHStr(): Buffer {
+        const len = keyBlob.readUInt32BE(off); off += 4;
+        const data = keyBlob.subarray(off, off + len); off += len;
+        return data;
+      }
+      readSSHStr(); // key type "ssh-rsa"
+      const e = readSSHStr();
+      const n = readSSHStr();
+
+      const pubKeyObj = createPublicKey({
+        key: {
+          kty: 'RSA',
+          n: n.toString('base64url'),
+          e: e.toString('base64url'),
+        },
+        format: 'jwk',
+      });
+
+      const valid = cryptoVerify('sha256', signedData, pubKeyObj, sigBytes);
+      expect(valid).toBe(true);
+    });
+
+    it('should sign requests successfully', async () => {
+      const signer = new SSHSigner(rsaPath);
+      const result = await signer.signRequest('PUT', '/v1/blobs/b_test', 42, new Uint8Array([10, 20, 30]));
+
+      expect(result.authorization).toMatch(/^SSH-Signature .+$/);
+      expect(result.timestamp).toBeTruthy();
+      expect(result.sequence).toBe(42);
+      expect(result.publicKey).toBeTruthy();
+    });
+  });
+
+  describe('unsupported key', () => {
+    it('should throw for passphrase-protected keys', async () => {
+      const protectedPath = join(opensshDir, 'id_protected');
+      execSync(`ssh-keygen -t ed25519 -f "${protectedPath}" -N "testpass" -C "protected@chaoskb"`, {
+        stdio: 'pipe',
+      });
+
+      const signer = new SSHSigner(protectedPath);
+      await expect(signer.signRegistrationChallenge('test')).rejects.toThrow();
     });
   });
 });

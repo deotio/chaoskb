@@ -31,14 +31,76 @@ const TABLE_NAME = 'chaoskb-test';
 const PARAM_NAME = '/chaoskb/test/signups-enabled';
 const ddb = { send: mockSend } as any;
 
+// --- SSH wire-format helpers ---
+
+/** Write a string/buffer as an SSH wire-format string (uint32 length prefix + data). */
+function sshString(data: string | Buffer): Buffer {
+  const buf = typeof data === 'string' ? Buffer.from(data) : data;
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(buf.length, 0);
+  return Buffer.concat([len, buf]);
+}
+
+/** Build an SSH wire-format public key blob for an Ed25519 key (raw 32 bytes). */
+function buildEd25519SSHBlob(rawKey: Buffer): Buffer {
+  return Buffer.concat([sshString('ssh-ed25519'), sshString(rawKey)]);
+}
+
+/** Build an SSH wire-format public key blob for an RSA key. */
+function buildRSASSHBlob(publicKey: crypto.KeyObject): Buffer {
+  // Export as JWK to extract e and n components
+  const jwk = publicKey.export({ format: 'jwk' });
+  const e = Buffer.from(jwk.e!, 'base64url');
+  const n = Buffer.from(jwk.n!, 'base64url');
+  // ssh-rsa wire format: string("ssh-rsa") + mpint(e) + mpint(n)
+  // For mpint, we need to add a leading zero byte if the high bit is set
+  const ePadded = (e[0] & 0x80) ? Buffer.concat([Buffer.from([0x00]), e]) : e;
+  const nPadded = (n[0] & 0x80) ? Buffer.concat([Buffer.from([0x00]), n]) : n;
+  return Buffer.concat([sshString('ssh-rsa'), sshString(ePadded), sshString(nPadded)]);
+}
+
+/** Build an SSH wire-format public key blob for an ECDSA nistp256 key. */
+function buildECDSASSHBlob(publicKey: crypto.KeyObject): Buffer {
+  // Export the uncompressed EC point from the SPKI DER encoding
+  const spki = publicKey.export({ type: 'spki', format: 'der' });
+  // The EC point is in the BIT STRING at the end of the SPKI structure.
+  // For P-256 it's 65 bytes (0x04 + 32 bytes x + 32 bytes y).
+  const point = spki.subarray(spki.length - 65);
+  return Buffer.concat([
+    sshString('ecdsa-sha2-nistp256'),
+    sshString('nistp256'),
+    sshString(point),
+  ]);
+}
+
 // Generate a real Ed25519 key pair for signature tests
 const { publicKey: ed25519PublicKey, privateKey: ed25519PrivateKey } = crypto.generateKeyPairSync('ed25519');
-const publicKeyBuffer = ed25519PublicKey.export({ type: 'spki', format: 'der' }).subarray(12); // strip DER prefix
-const VALID_PUBLIC_KEY = publicKeyBuffer.toString('base64');
+const ed25519RawKey = ed25519PublicKey.export({ type: 'spki', format: 'der' }).subarray(12); // strip DER prefix
+const VALID_PUBLIC_KEY = ed25519RawKey.toString('base64');
+
+// Generate SSH wire-format Ed25519 key
+const ED25519_SSH_BLOB = buildEd25519SSHBlob(ed25519RawKey);
+const ED25519_SSH_PUBLIC_KEY = ED25519_SSH_BLOB.toString('base64');
+
+// Generate RSA key pair
+const { publicKey: rsaPublicKey, privateKey: rsaPrivateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+const RSA_SSH_BLOB = buildRSASSHBlob(rsaPublicKey);
+const RSA_SSH_PUBLIC_KEY = RSA_SSH_BLOB.toString('base64');
+
+// Generate ECDSA key pair (P-256)
+const { publicKey: ecdsaPublicKey, privateKey: ecdsaPrivateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const ECDSA_SSH_BLOB = buildECDSASSHBlob(ecdsaPublicKey);
+const ECDSA_SSH_PUBLIC_KEY = ECDSA_SSH_BLOB.toString('base64');
 
 function signChallenge(nonce: string): string {
   const data = Buffer.from(`chaoskb-register\n${nonce}`);
   const signature = crypto.sign(null, data, ed25519PrivateKey);
+  return signature.toString('base64');
+}
+
+function signChallengeWithKey(nonce: string, privateKey: crypto.KeyObject, algorithm: string | null): string {
+  const data = Buffer.from(`chaoskb-register\n${nonce}`);
+  const signature = crypto.sign(algorithm, data, privateKey);
   return signature.toString('base64');
 }
 
@@ -528,6 +590,140 @@ describe('POST /v1/auth/register (GitHub integration)', () => {
     const result = await handleRegister(body, ddb, TABLE_NAME, PARAM_NAME);
 
     expect(result.statusCode).toBe(201);
+  });
+});
+
+describe('POST /v1/auth/register (SSH key type support)', () => {
+  beforeEach(() => {
+    mockSend.mockReset();
+    mockSsmSend.mockReset();
+    _resetSignupsCache();
+  });
+
+  function setupSuccessfulRegistration(nonce: string) {
+    // SSM returns signups enabled
+    mockSsmSend.mockResolvedValueOnce({ Parameter: { Value: 'true' } });
+    // DeleteCommand: atomic challenge consumption
+    mockChallengeConsumed(nonce);
+    // PutCommand: create tenant
+    mockSend.mockResolvedValueOnce({});
+    // PutCommand: audit event
+    mockSend.mockResolvedValueOnce({});
+  }
+
+  it('should register with Ed25519 SSH wire-format key (201)', async () => {
+    const nonce = crypto.randomBytes(32).toString('base64');
+    const signature = signChallengeWithKey(nonce, ed25519PrivateKey, null);
+    setupSuccessfulRegistration(nonce);
+
+    const body = JSON.stringify({
+      publicKey: ED25519_SSH_PUBLIC_KEY,
+      signedChallenge: signature,
+      challengeNonce: nonce,
+    });
+    const result = await handleRegister(body, ddb, TABLE_NAME, PARAM_NAME);
+
+    expect(result.statusCode).toBe(201);
+    const parsed = JSON.parse(result.body);
+    expect(parsed.tenantId).toBeDefined();
+    expect(parsed.publicKey).toBe(ED25519_SSH_PUBLIC_KEY);
+  });
+
+  it('should register with RSA key (201)', async () => {
+    const nonce = crypto.randomBytes(32).toString('base64');
+    const signature = signChallengeWithKey(nonce, rsaPrivateKey, 'sha256');
+    setupSuccessfulRegistration(nonce);
+
+    const body = JSON.stringify({
+      publicKey: RSA_SSH_PUBLIC_KEY,
+      signedChallenge: signature,
+      challengeNonce: nonce,
+    });
+    const result = await handleRegister(body, ddb, TABLE_NAME, PARAM_NAME);
+
+    expect(result.statusCode).toBe(201);
+    const parsed = JSON.parse(result.body);
+    expect(parsed.tenantId).toBeDefined();
+    expect(parsed.publicKey).toBe(RSA_SSH_PUBLIC_KEY);
+  });
+
+  it('should register with ECDSA nistp256 key (201)', async () => {
+    const nonce = crypto.randomBytes(32).toString('base64');
+    const signature = signChallengeWithKey(nonce, ecdsaPrivateKey, 'sha256');
+    setupSuccessfulRegistration(nonce);
+
+    const body = JSON.stringify({
+      publicKey: ECDSA_SSH_PUBLIC_KEY,
+      signedChallenge: signature,
+      challengeNonce: nonce,
+    });
+    const result = await handleRegister(body, ddb, TABLE_NAME, PARAM_NAME);
+
+    expect(result.statusCode).toBe(201);
+    const parsed = JSON.parse(result.body);
+    expect(parsed.tenantId).toBeDefined();
+    expect(parsed.publicKey).toBe(ECDSA_SSH_PUBLIC_KEY);
+  });
+
+  it('should reject RSA signature made with wrong key (401)', async () => {
+    const nonce = crypto.randomBytes(32).toString('base64');
+    // Generate a different RSA key and sign with it
+    const { privateKey: wrongPrivateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const signature = signChallengeWithKey(nonce, wrongPrivateKey, 'sha256');
+
+    // SSM returns signups enabled
+    mockSsmSend.mockResolvedValueOnce({ Parameter: { Value: 'true' } });
+    // DeleteCommand: atomic challenge consumption
+    mockChallengeConsumed(nonce);
+
+    const body = JSON.stringify({
+      publicKey: RSA_SSH_PUBLIC_KEY,
+      signedChallenge: signature,
+      challengeNonce: nonce,
+    });
+    const result = await handleRegister(body, ddb, TABLE_NAME, PARAM_NAME);
+
+    expect(result.statusCode).toBe(401);
+    expect(JSON.parse(result.body).error).toBe('invalid_signature');
+  });
+
+  it('should reject ECDSA signature made with wrong key (401)', async () => {
+    const nonce = crypto.randomBytes(32).toString('base64');
+    // Generate a different ECDSA key and sign with it
+    const { privateKey: wrongPrivateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const signature = signChallengeWithKey(nonce, wrongPrivateKey, 'sha256');
+
+    mockSsmSend.mockResolvedValueOnce({ Parameter: { Value: 'true' } });
+    mockChallengeConsumed(nonce);
+
+    const body = JSON.stringify({
+      publicKey: ECDSA_SSH_PUBLIC_KEY,
+      signedChallenge: signature,
+      challengeNonce: nonce,
+    });
+    const result = await handleRegister(body, ddb, TABLE_NAME, PARAM_NAME);
+
+    expect(result.statusCode).toBe(401);
+    expect(JSON.parse(result.body).error).toBe('invalid_signature');
+  });
+
+  it('should reject Ed25519 signature made with wrong key (401)', async () => {
+    const nonce = crypto.randomBytes(32).toString('base64');
+    const { privateKey: wrongPrivateKey } = crypto.generateKeyPairSync('ed25519');
+    const signature = signChallengeWithKey(nonce, wrongPrivateKey, null);
+
+    mockSsmSend.mockResolvedValueOnce({ Parameter: { Value: 'true' } });
+    mockChallengeConsumed(nonce);
+
+    const body = JSON.stringify({
+      publicKey: ED25519_SSH_PUBLIC_KEY,
+      signedChallenge: signature,
+      challengeNonce: nonce,
+    });
+    const result = await handleRegister(body, ddb, TABLE_NAME, PARAM_NAME);
+
+    expect(result.statusCode).toBe(401);
+    expect(JSON.parse(result.body).error).toBe('invalid_signature');
   });
 });
 

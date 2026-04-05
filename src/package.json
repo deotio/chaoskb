@@ -55,11 +55,13 @@
     "commander": "^14.0.3",
     "linkedom": "^0.18.12",
     "onnxruntime-node": "^1.24.3",
-    "sodium-native": "^5.1.0"
+    "sodium-native": "^5.1.0",
+    "sshpk": "^1.18.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
+    "@types/sshpk": "^1.17.4",
     "@vitest/coverage-v8": "^4.1.0",
     "vitest": "^4.1.0"
   },
