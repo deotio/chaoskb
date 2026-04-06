@@ -1,6 +1,6 @@
 import type BetterSqlite3 from 'better-sqlite3';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const CREATE_TABLES_SQL: string[] = [
   `CREATE TABLE IF NOT EXISTS sources (
@@ -57,6 +57,34 @@ export const CREATE_TABLES_SQL: string[] = [
     INSERT INTO chunks_fts(rowid, content, source_id, chunk_index)
     VALUES (new.rowid, new.content, new.source_id, new.chunk_index);
   END`,
+  // --- v3: Sync infrastructure tables ---
+  `CREATE TABLE IF NOT EXISTS sync_sequence (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    value INTEGER NOT NULL DEFAULT 0
+  )`,
+  `INSERT OR IGNORE INTO sync_sequence (id, value) VALUES (1, 0)`,
+  `CREATE TABLE IF NOT EXISTS sync_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    blob_id TEXT NOT NULL,
+    operation TEXT NOT NULL CHECK (operation IN ('upload', 'delete')),
+    data BLOB,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    max_retries INTEGER NOT NULL DEFAULT 5,
+    last_attempt TEXT,
+    next_attempt TEXT,
+    error_message TEXT,
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (status IN ('pending', 'processing', 'failed', 'completed')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_queue_status
+    ON sync_queue(status, next_attempt)`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_queue_blob
+    ON sync_queue(blob_id)`,
+  `CREATE TABLE IF NOT EXISTS sync_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`,
 ];
 
 export function initializeSchema(db: BetterSqlite3.Database): void {
@@ -102,6 +130,10 @@ export function migrateSchema(db: BetterSqlite3.Database): void {
     runMigrationV2(db);
   }
 
+  if (currentVersion < 3) {
+    runMigrationV3(db);
+  }
+
   db.prepare('UPDATE schema_version SET version = ?').run(SCHEMA_VERSION);
 }
 
@@ -137,4 +169,103 @@ function runMigrationV2(db: BetterSqlite3.Database): void {
   // Backfill: populate FTS index from existing chunk data
   db.exec(`INSERT INTO chunks_fts(rowid, content, source_id, chunk_index)
     SELECT rowid, content, source_id, chunk_index FROM chunks`);
+}
+
+/**
+ * Migration v3: Add sync infrastructure tables.
+ *
+ * Moves sequence counter, upload queue, and sync state from flat files
+ * into SQLite for safe multi-process concurrent access.
+ */
+function runMigrationV3(db: BetterSqlite3.Database): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS sync_sequence (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    value INTEGER NOT NULL DEFAULT 0
+  )`);
+  db.exec(`INSERT OR IGNORE INTO sync_sequence (id, value) VALUES (1, 0)`);
+
+  db.exec(`CREATE TABLE IF NOT EXISTS sync_queue (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    blob_id TEXT NOT NULL,
+    operation TEXT NOT NULL CHECK (operation IN ('upload', 'delete')),
+    data BLOB,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    max_retries INTEGER NOT NULL DEFAULT 5,
+    last_attempt TEXT,
+    next_attempt TEXT,
+    error_message TEXT,
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK (status IN ('pending', 'processing', 'failed', 'completed')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sync_queue_status
+    ON sync_queue(status, next_attempt)`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_sync_queue_blob
+    ON sync_queue(blob_id)`);
+
+  db.exec(`CREATE TABLE IF NOT EXISTS sync_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )`);
+
+  // Import existing flat-file data if present
+  importFlatFileData(db);
+}
+
+/**
+ * Import data from legacy flat files into SQLite tables.
+ * Reads ~/.chaoskb/sequence, upload-queue.json, and sync-state.json.
+ * Files are left on disk as rollback backups.
+ */
+function importFlatFileData(db: BetterSqlite3.Database): void {
+  const { existsSync, readFileSync } = require('node:fs') as typeof import('node:fs');
+  const { join } = require('node:path') as typeof import('node:path');
+  const { homedir } = require('node:os') as typeof import('node:os');
+  const chaoskbDir = join(homedir(), '.chaoskb');
+
+  // Import sequence counter
+  const seqPath = join(chaoskbDir, 'sequence');
+  if (existsSync(seqPath)) {
+    try {
+      const value = parseInt(readFileSync(seqPath, 'utf-8').trim(), 10);
+      if (!isNaN(value) && value > 0) {
+        db.prepare('UPDATE sync_sequence SET value = ? WHERE id = 1').run(value);
+      }
+    } catch { /* ignore read errors */ }
+  }
+
+  // Import upload queue
+  const queuePath = join(chaoskbDir, 'upload-queue.json');
+  if (existsSync(queuePath)) {
+    try {
+      const items = JSON.parse(readFileSync(queuePath, 'utf-8')) as Array<{
+        blobId: string;
+        data: string;
+        retryCount: number;
+        error?: string;
+      }>;
+      const insertStmt = db.prepare(`
+        INSERT OR IGNORE INTO sync_queue (blob_id, operation, data, retry_count, error_message, status)
+        VALUES (?, 'upload', ?, ?, ?, 'pending')
+      `);
+      for (const item of items) {
+        const data = item.data ? Buffer.from(item.data, 'base64') : null;
+        insertStmt.run(item.blobId, data, item.retryCount, item.error ?? null);
+      }
+    } catch { /* ignore parse errors */ }
+  }
+
+  // Import sync state
+  const statePath = join(chaoskbDir, 'sync-state.json');
+  if (existsSync(statePath)) {
+    try {
+      const state = JSON.parse(readFileSync(statePath, 'utf-8')) as Record<string, unknown>;
+      const insertStmt = db.prepare('INSERT OR IGNORE INTO sync_state (key, value) VALUES (?, ?)');
+      for (const [key, value] of Object.entries(state)) {
+        if (value !== undefined && value !== null) {
+          insertStmt.run(key, String(value));
+        }
+      }
+    } catch { /* ignore parse errors */ }
+  }
 }

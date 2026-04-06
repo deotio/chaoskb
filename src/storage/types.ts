@@ -134,11 +134,62 @@ export interface IDatabaseManager {
   closeAll(): void;
 }
 
+/** Sync queue item */
+export interface SyncQueueItem {
+  id: number;
+  blobId: string;
+  operation: 'upload' | 'delete';
+  data: Uint8Array | null;
+  retryCount: number;
+  maxRetries: number;
+  lastAttempt?: string;
+  nextAttempt?: string;
+  errorMessage?: string;
+  status: 'pending' | 'processing' | 'failed' | 'completed';
+  createdAt: string;
+}
+
+/** Sync queue repository — SQLite-backed, multi-process safe */
+export interface ISyncQueueRepository {
+  /** Enqueue an upload or delete. Replaces existing pending entry for same blob+operation. */
+  enqueue(blobId: string, operation: 'upload' | 'delete', data?: Uint8Array): void;
+  /** Atomically claim pending items for processing. Each item is claimed by exactly one process. */
+  claimBatch(limit: number): SyncQueueItem[];
+  /** Mark an item as completed (deletes from queue). */
+  complete(id: number): void;
+  /** Mark an item as failed with error, increment retry count, set exponential backoff. */
+  fail(id: number, error: string): void;
+  /** Mark an item as permanently failed (exceeded max retries). */
+  permanentFail(id: number, error: string): void;
+  /** Release stale 'processing' items back to 'pending' (crash recovery). */
+  releaseStale(olderThanSeconds: number): number;
+  /** Count of pending + processing items. */
+  pendingCount(): number;
+}
+
+/** Atomic sequence counter — SQLite-backed, multi-process safe */
+export interface ISyncSequenceRepository {
+  /** Atomically increment and return the new value. */
+  next(): number;
+  /** Get current value without incrementing. */
+  peek(): number;
+}
+
+/** Key-value sync state store — SQLite-backed */
+export interface ISyncStateRepository {
+  get(key: string): string | undefined;
+  set(key: string, value: string): void;
+  delete(key: string): void;
+}
+
 /** Combined database interface */
 export interface IDatabase {
   readonly sources: ISourceRepository;
   readonly chunks: IChunkRepository;
   readonly syncStatus: ISyncStatusRepository;
   readonly embeddingIndex: IEmbeddingIndex;
+  readonly syncQueue: ISyncQueueRepository;
+  readonly syncSequence: ISyncSequenceRepository;
+  readonly syncState: ISyncStateRepository;
   close(): void;
 }
