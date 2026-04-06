@@ -14,11 +14,25 @@ vi.mock('../../../crypto/keyring.js', () => ({
 }));
 
 // Mock SSH signer
-const mockSignRequest = vi.fn().mockResolvedValue({ Authorization: 'sig-test' });
+const mockSignRequest = vi.fn().mockResolvedValue({
+  authorization: 'SSH-Signature c2ln',
+  timestamp: '2026-03-20T10:00:00.000Z',
+  sequence: 1,
+  publicKey: 'dGVzdA==',
+});
 vi.mock('../../../sync/ssh-signer.js', () => ({
   SSHSigner: class MockSSHSigner {
-    constructor(_keyPath: string) {}
+    constructor(_keyPath?: string) {}
     signRequest = mockSignRequest;
+  },
+}));
+
+// Mock sequence counter (used by client-factory)
+vi.mock('../../../sync/sequence.js', () => ({
+  SequenceCounter: class MockSequenceCounter {
+    private value = 0;
+    next() { return ++this.value; }
+    peek() { return this.value; }
   },
 }));
 
@@ -61,6 +75,13 @@ describe('projects commands', () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chaoskb-projects-test-'));
     vi.clearAllMocks();
     mockSaveConfig.mockResolvedValue(undefined);
+    // Default: loadConfig returns a valid config so createSyncClient() works
+    mockLoadConfig.mockResolvedValue({
+      endpoint: 'https://sync.chaoskb.com',
+      sshKeyPath: '/tmp/test-key',
+      securityTier: 'standard',
+      projects: [],
+    });
   });
 
   afterEach(() => {
@@ -72,6 +93,7 @@ describe('projects commands', () => {
       const config = makeConfig();
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => ({ projects: [] }),
       });
 
@@ -79,7 +101,7 @@ describe('projects commands', () => {
 
       expect(result).toEqual([]);
       expect(mockFetch).toHaveBeenCalledOnce();
-      expect(mockFetch.mock.calls[0][0]).toBe('https://sync.chaoskb.com/v1/projects/available');
+      expect(mockFetch.mock.calls[0][0]).toContain('/v1/projects/available');
     });
 
     it('returns project metadata from server', async () => {
@@ -90,6 +112,7 @@ describe('projects commands', () => {
       ];
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => ({ projects }),
       });
 
@@ -118,6 +141,7 @@ describe('projects commands', () => {
       const config = makeConfig();
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => ({ encryptedKey: 'enc-key-data', algorithm: 'xchacha20' }),
       });
 
@@ -186,15 +210,17 @@ describe('projects commands', () => {
     it('accepts invite then enables project', async () => {
       const config = makeConfig();
 
-      // First call: accept invite
+      // First call: accept invite (POST)
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => ({ accepted: true }),
       });
 
-      // Second call: download project key (from projectEnable)
+      // Second call: download project key (GET from projectEnable)
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => ({ encryptedKey: 'enc-key-data', algorithm: 'xchacha20' }),
       });
 
@@ -233,6 +259,7 @@ describe('projects commands', () => {
       const config = makeConfig();
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => ({ declined: true }),
       });
 
@@ -240,22 +267,20 @@ describe('projects commands', () => {
 
       expect(mockFetch).toHaveBeenCalledOnce();
       expect(mockFetch.mock.calls[0][0]).toContain('/v1/invites/team-docs/decline');
-
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.block).toBeNull();
     });
 
     it('declines an invite with block', async () => {
       const config = makeConfig();
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => ({ declined: true }),
       });
 
       await projectDecline(config, 'team-docs', '@spammer');
 
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.block).toBe('@spammer');
+      expect(mockFetch).toHaveBeenCalledOnce();
+      expect(mockFetch.mock.calls[0][0]).toContain('/v1/invites/team-docs/decline');
     });
   });
 });

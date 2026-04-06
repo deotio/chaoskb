@@ -399,29 +399,13 @@ async function uploadWrappedMasterKey(
   try {
     const wrappedBlob = wrapMasterKey(secureMasterKey, keyInfo);
 
-    // Sign the wrapped blob for integrity verification
-    const { SSHSigner } = await import('../sync/ssh-signer.js');
-    const { SequenceCounter } = await import('../sync/sequence.js');
-    const signer = new SSHSigner(ssh.keyPath ?? undefined);
-    const seq = new SequenceCounter();
-    const { authorization, timestamp, sequence, publicKey } = await signer.signRequest(
-      'PUT',
-      '/v1/wrapped-key',
-      seq.next(),
-      wrappedBlob,
-    );
-
-    await fetchWithTimeout(`${endpoint}/v1/wrapped-key`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        Authorization: authorization,
-        'X-ChaosKB-Timestamp': timestamp,
-        'X-ChaosKB-Sequence': String(sequence),
-        'X-ChaosKB-PublicKey': publicKey,
-      },
-      body: wrappedBlob,
+    const { createSyncHttpClientFromConfig } = await import('../sync/client-factory.js');
+    const client = createSyncHttpClientFromConfig({
+      endpoint,
+      sshKeyPath: ssh.keyPath ?? undefined,
     });
+
+    await client.put('/v1/wrapped-key', wrappedBlob);
   } finally {
     secureMasterKey.dispose();
   }
@@ -440,25 +424,13 @@ async function restoreMasterKey(
 ): Promise<void> {
   if (!ssh.publicKey) return;
 
-  const { SSHSigner } = await import('../sync/ssh-signer.js');
-  const { SequenceCounter } = await import('../sync/sequence.js');
-  const signer = new SSHSigner(ssh.keyPath ?? undefined);
-  const seq = new SequenceCounter();
-  const { authorization, timestamp, sequence, publicKey } = await signer.signRequest(
-    'GET',
-    '/v1/wrapped-key',
-    seq.next(),
-  );
-
-  const response = await fetchWithTimeout(`${endpoint}/v1/wrapped-key`, {
-    method: 'GET',
-    headers: {
-      Authorization: authorization,
-      'X-ChaosKB-Timestamp': timestamp,
-      'X-ChaosKB-Sequence': String(sequence),
-      'X-ChaosKB-PublicKey': publicKey,
-    },
+  const { createSyncHttpClientFromConfig } = await import('../sync/client-factory.js');
+  const client = createSyncHttpClientFromConfig({
+    endpoint,
+    sshKeyPath: ssh.keyPath ?? undefined,
   });
+
+  const response = await client.get('/v1/wrapped-key');
 
   if (!response.ok) {
     throw new Error(`Failed to download wrapped key: ${response.status}`);

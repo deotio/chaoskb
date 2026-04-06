@@ -88,7 +88,7 @@ describe('kb-ingest handler', () => {
     );
   });
 
-  it('should set sync status to local_only for all blobs', async () => {
+  it('should enqueue all blobs for sync upload', async () => {
     vi.mocked(deps.pipeline.fetchAndExtract).mockResolvedValue({
       title: 'Test',
       content: 'Content',
@@ -116,9 +116,9 @@ describe('kb-ingest handler', () => {
 
     await handleKbIngest({ url: 'https://example.com' }, deps);
 
-    // Should set sync status for source + 1 chunk = 2 calls
-    expect(deps.db.syncStatus.set).toHaveBeenCalledTimes(2);
-    expect(deps.db.syncStatus.set).toHaveBeenCalledWith('b_id0', 'local_only');
-    expect(deps.db.syncStatus.set).toHaveBeenCalledWith('b_id1', 'local_only');
+    // Should enqueue source + 1 chunk = 2 calls
+    expect(deps.db.storeAndEnqueueUpload).toHaveBeenCalledTimes(2);
+    expect(deps.db.storeAndEnqueueUpload).toHaveBeenCalledWith('b_id0', expect.any(Uint8Array));
+    expect(deps.db.storeAndEnqueueUpload).toHaveBeenCalledWith('b_id1', expect.any(Uint8Array));
   });
 });

@@ -35,12 +35,33 @@ function createMockDeps(): McpDependencies {
       search: vi.fn().mockReturnValue([]),
       size: 0,
     },
+    syncQueue: {
+      enqueue: vi.fn(),
+      claimBatch: vi.fn().mockReturnValue([]),
+      complete: vi.fn(),
+      fail: vi.fn(),
+      permanentFail: vi.fn(),
+      releaseStale: vi.fn().mockReturnValue(0),
+      pendingCount: vi.fn().mockReturnValue(0),
+    },
+    syncSequence: {
+      next: vi.fn().mockReturnValue(1),
+      peek: vi.fn().mockReturnValue(0),
+    },
+    syncState: {
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+    },
+    storeAndEnqueueUpload: vi.fn(),
+    enqueueDelete: vi.fn(),
     close: vi.fn(),
   };
 
   const mockDbManager: IDatabaseManager = {
     getPersonalDb: vi.fn().mockReturnValue(mockDb),
     getProjectDb: vi.fn().mockReturnValue(mockDb),
+    getNamedKBDb: vi.fn().mockReturnValue(mockDb),
     listProjects: vi.fn().mockReturnValue([]),
     deleteProject: vi.fn().mockReturnValue(true),
     closeAll: vi.fn(),

@@ -296,6 +296,8 @@ export function createMcpServer(deps: McpDependencies): Server {
             },
             resolveDeps(kbArg),
           );
+          // Drain sync queue in background (don't block response)
+          deps.syncService?.drainQueue().catch(() => {});
           return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
         case 'kb_query': {
@@ -348,6 +350,8 @@ export function createMcpServer(deps: McpDependencies): Server {
             },
             resolveDeps(kbArg),
           );
+          // Drain sync queue in background (don't block response)
+          deps.syncService?.drainQueue().catch(() => {});
           return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
         case 'kb_summary': {

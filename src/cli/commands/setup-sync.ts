@@ -167,7 +167,7 @@ export async function setupSyncCommand(options: SetupSyncOptions = {}): Promise<
         console.log('  Waiting for existing device to share encryption key...');
 
         // Poll for wrapped master key from the existing device
-        const wrappedKey = await pollForWrappedKey(endpoint, signer);
+        const wrappedKey = await pollForWrappedKey(endpoint, sshKeyPath);
         if (wrappedKey) {
           console.log('  Encryption key received.');
           // The wrapped key handling (unwrap + store in keyring) will be done
@@ -289,29 +289,17 @@ export async function setupSyncCommand(options: SetupSyncOptions = {}): Promise<
  */
 async function pollForWrappedKey(
   endpoint: string,
-  signer: SSHSigner,
+  sshKeyPath: string,
 ): Promise<Uint8Array | null> {
-  const { SequenceCounter } = await import('../../sync/sequence.js');
-  const sequence = new SequenceCounter();
+  const { createSyncHttpClientFromConfig } = await import('../../sync/client-factory.js');
+  const client = createSyncHttpClientFromConfig({ endpoint, sshKeyPath });
   const deadline = Date.now() + 5 * 60 * 1000;
 
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     try {
-      const urlPath = '/v1/wrapped-key';
-      const result = await signer.signRequest('GET', urlPath, sequence.next());
-
-      const resp = await fetch(`${endpoint}${urlPath}`, {
-        method: 'GET',
-        headers: {
-          Authorization: result.authorization,
-          'X-ChaosKB-Timestamp': result.timestamp,
-          'X-ChaosKB-Sequence': String(result.sequence),
-          'X-ChaosKB-PublicKey': result.publicKey,
-        },
-        signal: AbortSignal.timeout(10_000),
-      });
+      const resp = await client.get('/v1/wrapped-key');
 
       if (resp.status === 200) {
         const data = await resp.arrayBuffer();

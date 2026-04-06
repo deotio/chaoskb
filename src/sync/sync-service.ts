@@ -1,7 +1,3 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
-
 import type {
   ISyncService,
   SyncConfig,
@@ -13,29 +9,24 @@ import type { IDatabase } from '../storage/types.js';
 import type { IEncryptionService, DerivedKeySet } from '../crypto/types.js';
 import { SSHSigner } from './ssh-signer.js';
 import { SyncHttpClient } from './http-client.js';
-import { UploadQueue } from './upload-queue.js';
+import { SyncQueueProcessor } from './queue-processor.js';
 import { incrementalSync } from './incremental-sync.js';
 import { fullSync } from './full-sync.js';
 import { verifyCanary } from './canary.js';
 import { verifyBlobCount } from './verification.js';
 
-const CHAOSKB_DIR = join(homedir(), '.chaoskb');
-const SYNC_STATE_PATH = join(CHAOSKB_DIR, 'sync-state.json');
-const UPLOAD_QUEUE_PATH = join(CHAOSKB_DIR, 'upload-queue.json');
-
 /**
  * Main sync service that orchestrates all sync operations.
  *
- * Manages SSH signing, HTTP communication, upload queueing,
- * and sync state persistence.
+ * Uses SQLite-backed queue and state (via IDatabase) instead of flat files.
+ * Multi-process safe: concurrent VS Code instances share the same SQLite DB.
  */
 export class SyncService implements ISyncService {
   private readonly httpClient: SyncHttpClient;
-  private readonly uploadQueue: UploadQueue;
+  private readonly queueProcessor: SyncQueueProcessor;
   private readonly storage: IDatabase;
   private readonly encryptionService: IEncryptionService;
   private readonly keys: DerivedKeySet;
-  private state: SyncState;
 
   constructor(
     config: SyncConfig,
@@ -44,31 +35,30 @@ export class SyncService implements ISyncService {
     keys: DerivedKeySet,
   ) {
     const signer = new SSHSigner(config.sshKeyPath);
-    this.httpClient = new SyncHttpClient(config, signer);
-    this.uploadQueue = new UploadQueue(this.httpClient, UPLOAD_QUEUE_PATH);
+    this.httpClient = new SyncHttpClient(config, signer, storage.syncSequence);
+    this.queueProcessor = new SyncQueueProcessor(storage.syncQueue, this.httpClient);
     this.storage = storage;
     this.encryptionService = encryptionService;
     this.keys = keys;
-    this.state = this.loadState();
   }
 
   /**
    * Run incremental sync — download changes since last successful sync.
    */
   async incrementalSync(): Promise<SyncResult> {
+    const lastSync = this.storage.syncState.get('lastSyncTimestamp');
     const result = await incrementalSync(
       this.httpClient,
       this.storage,
-      this.state.lastSyncTimestamp,
+      lastSync,
     );
 
     if (result.success) {
-      this.state.lastSyncTimestamp = new Date().toISOString();
-      this.saveState();
+      this.storage.syncState.set('lastSyncTimestamp', new Date().toISOString());
     }
 
-    // Process any pending uploads after downloading
-    await this.uploadQueue.processQueue();
+    // Process any pending uploads/deletes after downloading
+    await this.queueProcessor.processQueue();
 
     return result;
   }
@@ -77,8 +67,9 @@ export class SyncService implements ISyncService {
    * Run full sync — download all blobs from the server.
    */
   async fullSync(): Promise<SyncResult> {
-    const result = await fullSync(this.httpClient, this.storage, this.state);
-    this.saveState();
+    const state = this.loadState();
+    const result = await fullSync(this.httpClient, this.storage, state);
+    this.saveState(state);
     return result;
   }
 
@@ -86,26 +77,30 @@ export class SyncService implements ISyncService {
    * Enqueue a blob for upload to the server.
    */
   async upload(blobId: string, data: Uint8Array): Promise<void> {
-    await this.uploadQueue.enqueue(blobId, data);
-    // Attempt immediate upload
-    await this.uploadQueue.processQueue();
+    this.storage.syncQueue.enqueue(blobId, 'upload', data);
+    // Attempt immediate processing
+    await this.queueProcessor.processQueue();
   }
 
   /**
-   * Delete a blob from the server (soft-delete / tombstone).
+   * Enqueue a blob for deletion from the server.
    */
   async deleteBlob(blobId: string): Promise<void> {
-    const response = await this.httpClient.delete(`/v1/blobs/${blobId}`);
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`Failed to delete blob ${blobId}: HTTP ${response.status}`);
-    }
+    this.storage.syncQueue.enqueue(blobId, 'delete');
+    // Attempt immediate processing
+    await this.queueProcessor.processQueue();
+  }
+
+  /**
+   * Process pending items in the sync queue.
+   * Called by the MCP server after tool calls that enqueue items.
+   */
+  async drainQueue(): Promise<void> {
+    await this.queueProcessor.processQueue();
   }
 
   /**
    * Get current quota usage from the server.
-   *
-   * Fetches quota info from the blob count endpoint, which includes
-   * quota headers in its response.
    */
   async getQuota(): Promise<QuotaInfo> {
     const response = await this.httpClient.get('/v1/blobs/count');
@@ -118,7 +113,6 @@ export class SyncService implements ISyncService {
       return data.quota;
     }
 
-    // Fallback: no quota info available
     return { used: 0, limit: 0, percentage: 0 };
   }
 
@@ -139,7 +133,6 @@ export class SyncService implements ISyncService {
 
   /**
    * Check for unacknowledged notifications from the server.
-   * Returns formatted notification strings for display by the MCP layer.
    */
   async checkNotifications(): Promise<string[]> {
     try {
@@ -184,23 +177,32 @@ export class SyncService implements ISyncService {
     }
   }
 
+  /**
+   * Load full sync state from SQLite key-value store.
+   */
   private loadState(): SyncState {
-    try {
-      if (existsSync(SYNC_STATE_PATH)) {
-        const raw = readFileSync(SYNC_STATE_PATH, 'utf-8');
-        return JSON.parse(raw) as SyncState;
-      }
-    } catch {
-      // Corrupted state file — start fresh
-    }
-    return { fullSyncInProgress: false };
+    const fullSyncInProgress = this.storage.syncState.get('fullSyncInProgress') === 'true';
+    const fullSyncCursor = this.storage.syncState.get('fullSyncCursor');
+    const lastSyncTimestamp = this.storage.syncState.get('lastSyncTimestamp');
+    return {
+      fullSyncInProgress,
+      fullSyncCursor,
+      lastSyncTimestamp,
+    };
   }
 
-  private saveState(): void {
-    const dir = dirname(SYNC_STATE_PATH);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+  /**
+   * Save full sync state to SQLite key-value store.
+   */
+  private saveState(state: SyncState): void {
+    this.storage.syncState.set('fullSyncInProgress', String(state.fullSyncInProgress));
+    if (state.fullSyncCursor) {
+      this.storage.syncState.set('fullSyncCursor', state.fullSyncCursor);
+    } else {
+      this.storage.syncState.delete('fullSyncCursor');
     }
-    writeFileSync(SYNC_STATE_PATH, JSON.stringify(this.state, null, 2), 'utf-8');
+    if (state.lastSyncTimestamp) {
+      this.storage.syncState.set('lastSyncTimestamp', state.lastSyncTimestamp);
+    }
   }
 }

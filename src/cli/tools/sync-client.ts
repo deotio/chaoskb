@@ -1,52 +1,28 @@
-import * as path from 'node:path';
-import * as os from 'node:os';
-import { loadConfig } from '../commands/setup.js';
+import { createSyncHttpClient } from '../../sync/client-factory.js';
+import type { ISyncHttpClient } from '../../sync/types.js';
 
 export interface SyncClient {
   endpoint: string;
+  client: ISyncHttpClient;
   signedFetch: (method: string, urlPath: string, body?: Uint8Array) => Promise<Response>;
 }
 
 /**
  * Create an authenticated HTTP client for the sync server.
- * Shared by all device management MCP tools.
+ * Shared by all device management MCP tools and CLI commands.
  */
 export async function createSyncClient(): Promise<SyncClient> {
-  const config = await loadConfig();
-  if (!config?.endpoint) {
-    throw new Error('Sync is not configured. Run `chaoskb-mcp setup-sync` first.');
-  }
-
-  const endpoint = config.endpoint.replace(/\/+$/, '');
-  const sshKeyPath = config.sshKeyPath ?? path.join(os.homedir(), '.ssh', 'id_ed25519');
-
-  const { SSHSigner } = await import('../../sync/ssh-signer.js');
-  const { SequenceCounter } = await import('../../sync/sequence.js');
-  const signer = new SSHSigner(sshKeyPath);
-  const sequence = new SequenceCounter();
+  const { client, config } = await createSyncHttpClient();
 
   const signedFetch = async (method: string, urlPath: string, body?: Uint8Array): Promise<Response> => {
-    const seq = sequence.next();
-    const result = await signer.signRequest(method, urlPath, seq, body);
-
-    const headers: Record<string, string> = {
-      Authorization: result.authorization,
-      'X-ChaosKB-Timestamp': result.timestamp,
-      'X-ChaosKB-Sequence': String(result.sequence),
-      'X-ChaosKB-PublicKey': result.publicKey,
-    };
-
-    if (body) {
-      headers['Content-Type'] = 'application/json';
+    switch (method) {
+      case 'GET': return client.get(urlPath);
+      case 'PUT': return client.put(urlPath, body!);
+      case 'DELETE': return client.delete(urlPath);
+      case 'POST': return client.post(urlPath, body);
+      default: throw new Error(`Unsupported method: ${method}`);
     }
-
-    return fetch(`${endpoint}${urlPath}`, {
-      method,
-      headers,
-      body: body ?? undefined,
-      signal: AbortSignal.timeout(30_000),
-    });
   };
 
-  return { endpoint, signedFetch };
+  return { endpoint: config.endpoint, client, signedFetch };
 }

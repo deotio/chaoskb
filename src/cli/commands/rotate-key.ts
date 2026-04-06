@@ -106,31 +106,18 @@ export async function rotateKeyCommand(newKeyPath?: string, options?: { dryRun?:
     const newPublicKeyBase64 = pubKeyParts.length >= 2 ? pubKeyParts[1] : pubKeyParts[0];
 
     // Call POST /v1/rotate-start with the old key for auth
-    const { SSHSigner } = await import('../../sync/ssh-signer.js');
-    const { SequenceCounter } = await import('../../sync/sequence.js');
+    const { createSyncHttpClientFromConfig } = await import('../../sync/client-factory.js');
 
-    const oldSigner = new SSHSigner(config.sshKeyPath ?? undefined);
-    const sequence = new SequenceCounter();
+    const endpoint = config.endpoint.replace(/\/+$/, '');
+    const oldClient = createSyncHttpClientFromConfig({
+      endpoint,
+      sshKeyPath: config.sshKeyPath ?? undefined,
+    });
 
     const body = JSON.stringify({ newPublicKey: newPublicKeyBase64, wrappedBlob: wrappedBlobBase64 });
     const bodyBytes = new TextEncoder().encode(body);
 
-    const seq = sequence.next();
-    const authResult = await oldSigner.signRequest('POST', '/v1/rotate-start', seq, bodyBytes);
-
-    const endpoint = config.endpoint.replace(/\/+$/, '');
-
-    const rotateResponse = await fetch(`${endpoint}/v1/rotate-start`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: authResult.authorization,
-        'X-ChaosKB-Timestamp': authResult.timestamp,
-        'X-ChaosKB-Sequence': String(authResult.sequence),
-        'X-ChaosKB-PublicKey': authResult.publicKey,
-      },
-      body,
-    });
+    const rotateResponse = await oldClient.post('/v1/rotate-start', bodyBytes);
 
     if (!rotateResponse.ok) {
       const errBody = await rotateResponse.text();
@@ -140,21 +127,12 @@ export async function rotateKeyCommand(newKeyPath?: string, options?: { dryRun?:
     }
 
     // Upload new wrapped blob to /v1/wrapped-key using the NEW key for auth
-    const newSigner = new SSHSigner(newKeyInfo.keyPath);
-    const seq2 = sequence.next();
-    const uploadAuth = await newSigner.signRequest('PUT', '/v1/wrapped-key', seq2, wrappedBlob);
-
-    const uploadResponse = await fetch(`${endpoint}/v1/wrapped-key`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        Authorization: uploadAuth.authorization,
-        'X-ChaosKB-Timestamp': uploadAuth.timestamp,
-        'X-ChaosKB-Sequence': String(uploadAuth.sequence),
-        'X-ChaosKB-PublicKey': uploadAuth.publicKey,
-      },
-      body: wrappedBlob,
+    const newClient = createSyncHttpClientFromConfig({
+      endpoint,
+      sshKeyPath: newKeyInfo.keyPath,
     });
+
+    const uploadResponse = await newClient.put('/v1/wrapped-key', wrappedBlob);
 
     if (!uploadResponse.ok) {
       const errBody = await uploadResponse.text();

@@ -191,5 +191,9 @@ export interface IDatabase {
   readonly syncQueue: ISyncQueueRepository;
   readonly syncSequence: ISyncSequenceRepository;
   readonly syncState: ISyncStateRepository;
+  /** Enqueue an encrypted blob for upload. Sets sync status to local_only. */
+  storeAndEnqueueUpload(blobId: string, encryptedBytes: Uint8Array): void;
+  /** Enqueue a blob for deletion from the sync server. Sets sync status to pending_delete. */
+  enqueueDelete(blobId: string): void;
   close(): void;
 }

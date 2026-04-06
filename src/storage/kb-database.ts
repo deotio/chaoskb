@@ -9,6 +9,7 @@ import type {
   IEmbeddingIndex,
   DatabaseConfig,
 } from './types.js';
+import { SyncStatus } from './types.js';
 import { Database } from './database.js';
 import { SourceRepository } from './source-repo.js';
 import { ChunkRepository } from './chunk-repo.js';
@@ -40,6 +41,16 @@ export class KBDatabase implements IDatabase {
     this.syncSequence = new SyncSequenceRepository(db);
     this.syncState = new SyncStateRepository(db);
     this.embeddingIndex = new EmbeddingIndex(db);
+  }
+
+  storeAndEnqueueUpload(blobId: string, encryptedBytes: Uint8Array): void {
+    this.syncQueue.enqueue(blobId, 'upload', encryptedBytes);
+    this.syncStatus.set(blobId, SyncStatus.LocalOnly);
+  }
+
+  enqueueDelete(blobId: string): void {
+    this.syncQueue.enqueue(blobId, 'delete');
+    this.syncStatus.set(blobId, SyncStatus.PendingDelete);
   }
 
   close(): void {

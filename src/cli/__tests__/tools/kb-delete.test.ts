@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleKbDelete } from '../../tools/kb-delete.js';
 import { createMockDeps } from '../mcp-server.test.js';
 import type { McpDependencies } from '../../mcp-server.js';
-import { SyncStatus } from '../../../storage/types.js';
 
 describe('kb-delete handler', () => {
   let deps: McpDependencies;
@@ -41,8 +40,8 @@ describe('kb-delete handler', () => {
     expect(result).toEqual({ id: 'src1', deleted: true });
     expect(deps.db.sources.softDelete).toHaveBeenCalledWith('src1');
     expect(deps.db.embeddingIndex.remove).toHaveBeenCalledWith('src1');
-    expect(deps.db.syncStatus.set).toHaveBeenCalledWith('src1', SyncStatus.PendingDelete);
-    expect(deps.db.syncStatus.set).toHaveBeenCalledWith('chunk1', SyncStatus.PendingDelete);
+    expect(deps.db.enqueueDelete).toHaveBeenCalledWith('src1');
+    expect(deps.db.enqueueDelete).toHaveBeenCalledWith('chunk1');
   });
 
   it('should throw when source is not found', async () => {

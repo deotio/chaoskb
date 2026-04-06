@@ -1,5 +1,4 @@
 import type { McpDependencies } from '../mcp-server.js';
-import type { SyncStatus } from '../../storage/types.js';
 import type { SourcePayload, ChunkPayload } from '../../crypto/types.js';
 
 export interface KbIngestInput {
@@ -18,7 +17,7 @@ export async function handleKbIngest(
   input: KbIngestInput,
   deps: McpDependencies,
 ): Promise<KbIngestResult> {
-  const { db, pipeline, encryption, keys, syncService } = deps;
+  const { db, pipeline, encryption, keys } = deps;
 
   // 1. Fetch and extract content from URL
   const extracted = await pipeline.fetchAndExtract(input.url);
@@ -92,25 +91,10 @@ export async function handleKbIngest(
     })),
   );
 
-  // 10. Upload encrypted blobs to sync server (if sync is enabled)
-  if (syncService) {
-    try {
-      await syncService.upload(sourceId, sourceEncrypted.bytes);
-      db.syncStatus.set(sourceId, 'synced' as SyncStatus);
-      for (const chunk of chunkEncrypted) {
-        await syncService.upload(chunk.blobId, chunk.bytes);
-        db.syncStatus.set(chunk.blobId, 'synced' as SyncStatus);
-      }
-    } catch {
-      // Upload failed — mark as local_only for retry later
-      for (const blobId of allBlobIds) {
-        db.syncStatus.set(blobId, 'local_only' as SyncStatus);
-      }
-    }
-  } else {
-    for (const blobId of allBlobIds) {
-      db.syncStatus.set(blobId, 'local_only' as SyncStatus);
-    }
+  // 10. Enqueue encrypted blobs for sync (queue processor handles upload)
+  db.storeAndEnqueueUpload(sourceId, sourceEncrypted.bytes);
+  for (const chunk of chunkEncrypted) {
+    db.storeAndEnqueueUpload(chunk.blobId, chunk.bytes);
   }
 
   return {

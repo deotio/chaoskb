@@ -2,20 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { saveConfig, CHAOSKB_DIR } from './setup.js';
 import type { ChaosKBConfig } from '../mcp-server.js';
-import { SequenceCounter } from '../../sync/sequence.js';
-
-const sequence = new SequenceCounter();
-
-/** Convert signRequest result to fetch-compatible headers. */
-function toHeaders(result: { authorization: string; timestamp: string; sequence: number; publicKey: string }, extra?: Record<string, string>): Record<string, string> {
-  return {
-    Authorization: result.authorization,
-    'X-ChaosKB-Timestamp': result.timestamp,
-    'X-ChaosKB-Sequence': String(result.sequence),
-    'X-ChaosKB-PublicKey': result.publicKey,
-    ...extra,
-  };
-}
+import { createSyncClient } from '../tools/sync-client.js';
 
 export interface SharedProjectMeta {
   name: string;
@@ -39,13 +26,8 @@ export async function projectListAvailable(config: ChaosKBConfig): Promise<Share
     process.exit(1);
   }
 
-  const { SSHSigner } = await import('../../sync/ssh-signer.js');
-  const signer = new SSHSigner(config.sshKeyPath!);
-
-  const url = `${config.endpoint}/v1/projects/available`;
-  const signed = await signer.signRequest('GET', '/v1/projects/available', sequence.next());
-
-  const res = await fetch(url, { method: 'GET', headers: toHeaders(signed) });
+  const { signedFetch } = await createSyncClient();
+  const res = await signedFetch('GET', '/v1/projects/available');
 
   if (!res.ok) {
     const body = await res.text();
@@ -102,14 +84,10 @@ export async function projectEnable(config: ChaosKBConfig, projectName: string):
     return;
   }
 
-  const { SSHSigner } = await import('../../sync/ssh-signer.js');
-  const signer = new SSHSigner(config.sshKeyPath!);
+  const { signedFetch } = await createSyncClient();
 
   // Download encrypted project key
-  const keyUrl = `${config.endpoint}/v1/projects/${encodeURIComponent(projectName)}/key`;
-  const keyHeaders = await signer.signRequest('GET', `/v1/projects/${encodeURIComponent(projectName)}/key`, sequence.next());
-
-  const keyRes = await fetch(keyUrl, { method: 'GET', headers: toHeaders(keyHeaders) });
+  const keyRes = await signedFetch('GET', `/v1/projects/${encodeURIComponent(projectName)}/key`);
 
   if (!keyRes.ok) {
     const body = await keyRes.text();
@@ -124,8 +102,6 @@ export async function projectEnable(config: ChaosKBConfig, projectName: string):
   fs.mkdirSync(projectDir, { recursive: true, mode: 0o700 });
 
   // Store project key in keyring
-  // Stub: in production, we'd decrypt the project key using invite crypto
-  // and store the decrypted key. For now, store the encrypted key directly.
   const { KeyringService } = await import('../../crypto/keyring.js');
   const keyring = new KeyringService();
   const { SecureBuffer } = await import('../../crypto/secure-buffer.js');
@@ -138,9 +114,6 @@ export async function projectEnable(config: ChaosKBConfig, projectName: string):
 
   // Sync project data
   console.log(`Syncing ${projectName}...`);
-
-  // Stub: actual sync would pull blobs and decrypt them.
-  // For now, count items from the project directory.
   const itemCount = 0; // Placeholder — real sync happens in Phase 2+
   console.log(`Syncing ${projectName}... done (${itemCount} items)`);
 }
@@ -188,18 +161,14 @@ export async function projectAccept(config: ChaosKBConfig, projectName: string):
     process.exit(1);
   }
 
-  const { SSHSigner } = await import('../../sync/ssh-signer.js');
-  const signer = new SSHSigner(config.sshKeyPath!);
+  const { signedFetch } = await createSyncClient();
 
   // Accept the invite via server
-  const acceptUrl = `${config.endpoint}/v1/invites/${encodeURIComponent(projectName)}/accept`;
-  const acceptHeaders = await signer.signRequest('POST', `/v1/invites/${encodeURIComponent(projectName)}/accept`, sequence.next());
-
-  const acceptRes = await fetch(acceptUrl, {
-    method: 'POST',
-    headers: toHeaders(acceptHeaders, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({}),
-  });
+  const acceptRes = await signedFetch(
+    'POST',
+    `/v1/invites/${encodeURIComponent(projectName)}/accept`,
+    new TextEncoder().encode(JSON.stringify({})),
+  );
 
   if (!acceptRes.ok) {
     const body = await acceptRes.text();
@@ -226,17 +195,13 @@ export async function projectDecline(
     process.exit(1);
   }
 
-  const { SSHSigner } = await import('../../sync/ssh-signer.js');
-  const signer = new SSHSigner(config.sshKeyPath!);
+  const { signedFetch } = await createSyncClient();
 
-  const declineUrl = `${config.endpoint}/v1/invites/${encodeURIComponent(projectName)}/decline`;
-  const declineHeaders = await signer.signRequest('POST', `/v1/invites/${encodeURIComponent(projectName)}/decline`, sequence.next());
-
-  const declineRes = await fetch(declineUrl, {
-    method: 'POST',
-    headers: toHeaders(declineHeaders, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ block: block ?? null }),
-  });
+  const declineRes = await signedFetch(
+    'POST',
+    `/v1/invites/${encodeURIComponent(projectName)}/decline`,
+    new TextEncoder().encode(JSON.stringify({ block: block ?? null })),
+  );
 
   if (!declineRes.ok) {
     const body = await declineRes.text();

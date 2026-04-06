@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { loadConfig } from './setup.js';
+import { createSyncClient } from '../tools/sync-client.js';
 
 const CHAOSKB_DIR = path.join(os.homedir(), '.chaoskb');
 
@@ -22,59 +23,6 @@ function generateLinkCode(length: number): string {
 /** SHA-256 hex digest of a string. */
 function hashCode(code: string): string {
   return crypto.createHash('sha256').update(code).digest('hex');
-}
-
-/**
- * Helper to create an authenticated HTTP client for the sync server.
- * Returns { client, endpoint } or exits with an error message.
- */
-async function createSyncClient(): Promise<{
-  endpoint: string;
-  signedFetch: (method: string, urlPath: string, body?: Uint8Array) => Promise<Response>;
-}> {
-  const config = await loadConfig();
-  if (!config) {
-    console.error('ChaosKB is not set up. Run `chaoskb-mcp setup` first.');
-    process.exit(1);
-  }
-
-  if (!config.endpoint) {
-    console.error('Sync is not configured. Run `chaoskb-mcp setup-sync` first.');
-    process.exit(1);
-  }
-
-  const endpoint = config.endpoint.replace(/\/+$/, '');
-  const sshKeyPath = config.sshKeyPath ?? path.join(os.homedir(), '.ssh', 'id_ed25519');
-
-  const { SSHSigner } = await import('../../sync/ssh-signer.js');
-  const { SequenceCounter } = await import('../../sync/sequence.js');
-  const signer = new SSHSigner(sshKeyPath);
-  const sequence = new SequenceCounter();
-
-  const signedFetch = async (method: string, urlPath: string, body?: Uint8Array): Promise<Response> => {
-    const seq = sequence.next();
-    const result = await signer.signRequest(method, urlPath, seq, body);
-
-    const headers: Record<string, string> = {
-      Authorization: result.authorization,
-      'X-ChaosKB-Timestamp': result.timestamp,
-      'X-ChaosKB-Sequence': String(result.sequence),
-      'X-ChaosKB-PublicKey': result.publicKey,
-    };
-
-    if (body) {
-      headers['Content-Type'] = 'application/octet-stream';
-    }
-
-    return fetch(`${endpoint}${urlPath}`, {
-      method,
-      headers,
-      body: body ?? undefined,
-      signal: AbortSignal.timeout(30_000),
-    });
-  };
-
-  return { endpoint, signedFetch };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -97,40 +45,9 @@ export async function devicesAddCommand(): Promise<void> {
   const body = JSON.stringify({ codeHash });
   const bodyBytes = new TextEncoder().encode(body);
 
-  // Use a plain POST with JSON content type
-  const config = await loadConfig();
-  const endpoint = config!.endpoint!.replace(/\/+$/, '');
-  const sshKeyPath = config!.sshKeyPath ?? path.join(os.homedir(), '.ssh', 'id_ed25519');
+  const { signedFetch } = await createSyncClient();
 
-  const { SSHSigner } = await import('../../sync/ssh-signer.js');
-  const { SequenceCounter } = await import('../../sync/sequence.js');
-  const signer = new SSHSigner(sshKeyPath);
-  const sequence = new SequenceCounter();
-
-  const makeSignedRequest = async (method: string, urlPath: string, reqBody?: Uint8Array): Promise<Response> => {
-    const seq = sequence.next();
-    const result = await signer.signRequest(method, urlPath, seq, reqBody);
-
-    const headers: Record<string, string> = {
-      Authorization: result.authorization,
-      'X-ChaosKB-Timestamp': result.timestamp,
-      'X-ChaosKB-Sequence': String(result.sequence),
-      'X-ChaosKB-PublicKey': result.publicKey,
-    };
-
-    if (reqBody) {
-      headers['Content-Type'] = 'application/json';
-    }
-
-    return fetch(`${endpoint}${urlPath}`, {
-      method,
-      headers,
-      body: reqBody ?? undefined,
-      signal: AbortSignal.timeout(30_000),
-    });
-  };
-
-  const createResp = await makeSignedRequest('POST', '/v1/link-code', bodyBytes);
+  const createResp = await signedFetch('POST', '/v1/link-code', bodyBytes);
   if (!createResp.ok) {
     const err = await createResp.text();
     console.error(`Failed to create link code: ${createResp.status} ${err}`);
@@ -153,7 +70,7 @@ export async function devicesAddCommand(): Promise<void> {
   while (Date.now() < deadline) {
     await sleep(5000);
 
-    const statusResp = await makeSignedRequest('GET', pollPath);
+    const statusResp = await signedFetch('GET', pollPath);
     if (!statusResp.ok) {
       console.error(`  Poll failed: ${statusResp.status}`);
       continue;
@@ -180,6 +97,7 @@ export async function devicesAddCommand(): Promise<void> {
   const { wrapMasterKey } = await import('../../crypto/tiers/standard.js');
   const { KeyringService } = await import('../../crypto/keyring.js');
 
+  const config = await loadConfig();
   const keyring = new KeyringService();
   const masterKey = await keyring.retrieve('chaoskb', 'master-key');
   if (!masterKey) {
@@ -193,7 +111,7 @@ export async function devicesAddCommand(): Promise<void> {
       const wrappedBlob = wrapMasterKey(keyBuf, keyInfo);
       keyBuf.dispose();
 
-      const putResp = await makeSignedRequest('PUT', '/v1/wrapped-key', wrappedBlob);
+      const putResp = await signedFetch('PUT', '/v1/wrapped-key', wrappedBlob);
       if (!putResp.ok) {
         console.error(`  Failed to upload wrapped key: ${putResp.status}`);
         process.exit(1);
@@ -207,7 +125,7 @@ export async function devicesAddCommand(): Promise<void> {
     const wrappedBlob = wrapMasterKey(masterKey, keyInfo);
     masterKey.dispose();
 
-    const putResp = await makeSignedRequest('PUT', '/v1/wrapped-key', wrappedBlob);
+    const putResp = await signedFetch('PUT', '/v1/wrapped-key', wrappedBlob);
     if (!putResp.ok) {
       console.error(`  Failed to upload wrapped key: ${putResp.status}`);
       process.exit(1);

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncHttpClient, RetryableError } from '../http-client.js';
 import type { SSHSigner } from '../ssh-signer.js';
 import type { SyncConfig } from '../types.js';
+import type { ISyncSequenceRepository } from '../../storage/types.js';
 
 function createMockSigner(): SSHSigner {
   return {
@@ -12,6 +13,14 @@ function createMockSigner(): SSHSigner {
       publicKey: 'dGVzdA==',
     }),
   } as unknown as SSHSigner;
+}
+
+function createMockSequence(): ISyncSequenceRepository {
+  let value = 0;
+  return {
+    next: vi.fn().mockImplementation(() => ++value),
+    peek: vi.fn().mockImplementation(() => value),
+  };
 }
 
 function createMockResponse(status: number, body?: unknown, headers?: Record<string, string>): Response {
@@ -29,26 +38,28 @@ function createMockResponse(status: number, body?: unknown, headers?: Record<str
 describe('SyncHttpClient', () => {
   const httpsConfig: SyncConfig = { endpoint: 'https://api.chaoskb.com' };
   let mockSigner: SSHSigner;
+  let mockSequence: ISyncSequenceRepository;
 
   beforeEach(() => {
     vi.restoreAllMocks();
     mockSigner = createMockSigner();
+    mockSequence = createMockSequence();
   });
 
   describe('TLS enforcement', () => {
     it('should reject http:// endpoints', () => {
       expect(
-        () => new SyncHttpClient({ endpoint: 'http://api.chaoskb.com' }, mockSigner),
+        () => new SyncHttpClient({ endpoint: 'http://api.chaoskb.com' }, mockSigner, mockSequence),
       ).toThrow('TLS required');
     });
 
     it('should accept https:// endpoints', () => {
-      expect(() => new SyncHttpClient(httpsConfig, mockSigner)).not.toThrow();
+      expect(() => new SyncHttpClient(httpsConfig, mockSigner, mockSequence)).not.toThrow();
     });
 
     it('should reject endpoints without protocol', () => {
       expect(
-        () => new SyncHttpClient({ endpoint: 'api.chaoskb.com' }, mockSigner),
+        () => new SyncHttpClient({ endpoint: 'api.chaoskb.com' }, mockSigner, mockSequence),
       ).toThrow('TLS required');
     });
   });
@@ -58,7 +69,7 @@ describe('SyncHttpClient', () => {
       const mockResponse = createMockResponse(200, { blobs: [] });
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       const response = await client.get('/v1/blobs');
 
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -79,7 +90,7 @@ describe('SyncHttpClient', () => {
       const mockResponse = createMockResponse(201, { id: 'b_test' });
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       const body = new Uint8Array([1, 2, 3]);
       await client.put('/v1/blobs/b_test', body);
 
@@ -101,7 +112,7 @@ describe('SyncHttpClient', () => {
       const mockResponse = createMockResponse(200);
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       await client.delete('/v1/blobs/b_test');
 
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -116,7 +127,7 @@ describe('SyncHttpClient', () => {
       const mockResponse = createMockResponse(200);
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       await client.post('/v1/auth/register');
 
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -131,7 +142,7 @@ describe('SyncHttpClient', () => {
       const mockResponse = createMockResponse(401);
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       await expect(client.get('/v1/blobs')).rejects.toThrow('Authentication failed');
     });
 
@@ -139,7 +150,7 @@ describe('SyncHttpClient', () => {
       const mockResponse = createMockResponse(429, {}, { 'Retry-After': '30' });
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       try {
         await client.get('/v1/blobs');
         expect.unreachable('Should have thrown');
@@ -153,7 +164,7 @@ describe('SyncHttpClient', () => {
       const mockResponse = createMockResponse(429);
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       try {
         await client.get('/v1/blobs');
         expect.unreachable('Should have thrown');
@@ -166,7 +177,7 @@ describe('SyncHttpClient', () => {
     it('should throw on network error', async () => {
       vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       await expect(client.get('/v1/blobs')).rejects.toThrow('Network error');
     });
 
@@ -176,7 +187,7 @@ describe('SyncHttpClient', () => {
         return Promise.reject(error);
       });
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       await expect(client.get('/v1/blobs')).rejects.toThrow('Request timed out');
     });
   });
@@ -186,7 +197,7 @@ describe('SyncHttpClient', () => {
       const mockResponse = createMockResponse(200);
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse);
 
-      const client = new SyncHttpClient(httpsConfig, mockSigner);
+      const client = new SyncHttpClient(httpsConfig, mockSigner, mockSequence);
       const body = new Uint8Array([10, 20]);
       await client.put('/v1/blobs/b_xyz', body);
 

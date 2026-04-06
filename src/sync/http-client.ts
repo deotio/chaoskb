@@ -1,7 +1,7 @@
 import type { ISyncHttpClient } from './types.js';
 import type { SyncConfig } from './types.js';
 import type { SSHSigner } from './ssh-signer.js';
-import { SequenceCounter } from './sequence.js';
+import type { ISyncSequenceRepository } from '../storage/types.js';
 
 /** Error that indicates the request can be retried after a delay. */
 export class RetryableError extends Error {
@@ -27,10 +27,10 @@ const REQUEST_TIMEOUT_MS = 30_000;
 export class SyncHttpClient implements ISyncHttpClient {
   private readonly baseUrl: string;
   private readonly signer: SSHSigner;
-  private readonly sequence: SequenceCounter;
+  private readonly sequence: ISyncSequenceRepository;
 
-  constructor(config: SyncConfig, signer: SSHSigner, sequence?: SequenceCounter) {
-    this.sequence = sequence ?? new SequenceCounter();
+  constructor(config: SyncConfig, signer: SSHSigner, sequence: ISyncSequenceRepository) {
+    this.sequence = sequence;
     if (!config.endpoint.startsWith('https://')) {
       throw new Error(
         `TLS required: endpoint must start with https://, got "${config.endpoint}"`,
