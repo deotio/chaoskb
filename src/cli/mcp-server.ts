@@ -472,7 +472,11 @@ export async function startMcpServer(options: McpServerOptions): Promise<void> {
   const getDeps = async (): Promise<McpDependencies> => {
     if (deps) return deps;
     if (!depsPromise) {
-      depsPromise = initializeDependencies(options, config!).then(d => { deps = d; return d; });
+      depsPromise = initializeDependencies(options, config!).then(d => { deps = d; return d; }).catch(err => {
+        process.stderr.write(`[ChaosKB] Initialization failed: ${err.message}\n`);
+        depsPromise = null; // allow retry
+        throw err;
+      });
     }
     return depsPromise;
   };

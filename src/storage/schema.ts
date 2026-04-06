@@ -1,4 +1,7 @@
 import type BetterSqlite3 from 'better-sqlite3';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 
 export const SCHEMA_VERSION = 3;
 
@@ -218,9 +221,6 @@ function runMigrationV3(db: BetterSqlite3.Database): void {
  * Files are left on disk as rollback backups.
  */
 function importFlatFileData(db: BetterSqlite3.Database): void {
-  const { existsSync, readFileSync } = require('node:fs') as typeof import('node:fs');
-  const { join } = require('node:path') as typeof import('node:path');
-  const { homedir } = require('node:os') as typeof import('node:os');
   const chaoskbDir = join(homedir(), '.chaoskb');
 
   // Import sequence counter
