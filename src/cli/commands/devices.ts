@@ -97,7 +97,7 @@ export async function devicesAddCommand(): Promise<void> {
   const { wrapMasterKey } = await import('../../crypto/tiers/standard.js');
   const { KeyringService } = await import('../../crypto/keyring.js');
 
-  const config = await loadConfig();
+  await loadConfig(); // ensure config is initialized
   const keyring = new KeyringService();
   const masterKey = await keyring.retrieve('chaoskb', 'master-key');
   if (!masterKey) {
