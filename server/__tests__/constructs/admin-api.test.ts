@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it, beforeAll } from 'vitest';
 import { App, Stack } from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { BlobStore } from '../../lib/constructs/blob-store.js';
@@ -17,9 +17,14 @@ describe('AdminApi construct', () => {
     return Template.fromStack(stack);
   }
 
-  it('should create a Lambda function with correct runtime, memory, and timeout', () => {
-    const template = createTemplate();
+  // Cache the default template — CDK synth + esbuild bundling is slow on
+  // Windows Node 20 runners and can exceed the default 5s test timeout.
+  let template: Template;
+  beforeAll(() => {
+    template = createTemplate();
+  }, 30_000);
 
+  it('should create a Lambda function with correct runtime, memory, and timeout', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Runtime: 'nodejs22.x',
       MemorySize: 256,
@@ -28,24 +33,18 @@ describe('AdminApi construct', () => {
   });
 
   it('should have ARM64 architecture', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::Lambda::Function', {
       Architectures: ['arm64'],
     });
   });
 
   it('should have reserved concurrency of 5', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::Lambda::Function', {
       ReservedConcurrentExecutions: 5,
     });
   });
 
   it('should have X-Ray tracing enabled', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::Lambda::Function', {
       TracingConfig: {
         Mode: 'Active',
@@ -54,9 +53,9 @@ describe('AdminApi construct', () => {
   });
 
   it('should have environment variables set', () => {
-    const template = createTemplate(['https://chaoskb.com', 'https://dev.chaoskb.com']);
+    const custom = createTemplate(['https://chaoskb.com', 'https://dev.chaoskb.com']);
 
-    template.hasResourceProperties('AWS::Lambda::Function', {
+    custom.hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
         Variables: Match.objectLike({
           ENVIRONMENT: 'test',
@@ -67,16 +66,12 @@ describe('AdminApi construct', () => {
   });
 
   it('should create a Function URL with no auth', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::Lambda::Url', {
       AuthType: 'NONE',
     });
   });
 
   it('should have DynamoDB read permissions', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([
@@ -90,8 +85,6 @@ describe('AdminApi construct', () => {
   });
 
   it('should have CloudWatch read permissions', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([
@@ -105,8 +98,6 @@ describe('AdminApi construct', () => {
   });
 
   it('should have Cost Explorer permissions', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::IAM::Policy', {
       PolicyDocument: {
         Statement: Match.arrayWith([

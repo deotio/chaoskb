@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it, beforeAll } from 'vitest';
 import { App, Stack } from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { BlobStore } from '../../lib/constructs/blob-store.js';
@@ -20,9 +20,14 @@ describe('Api construct', () => {
     return Template.fromStack(stack);
   }
 
-  it('should create a Lambda function with Node.js 22 runtime', () => {
-    const template = createTemplate();
+  // Cache the default template — CDK synth + esbuild bundling is slow on
+  // Windows Node 20 runners and can exceed the default 5s test timeout.
+  let template: Template;
+  beforeAll(() => {
+    template = createTemplate();
+  }, 30_000);
 
+  it('should create a Lambda function with Node.js 22 runtime', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Runtime: 'nodejs22.x',
       MemorySize: 256,
@@ -31,8 +36,6 @@ describe('Api construct', () => {
   });
 
   it('should have environment variables set', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
         Variables: Match.objectLike({
@@ -43,38 +46,30 @@ describe('Api construct', () => {
   });
 
   it('should have reserved concurrency (default 10)', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::Lambda::Function', {
       ReservedConcurrentExecutions: 10,
     });
   });
 
   it('should allow configurable reserved concurrency', () => {
-    const template = createTemplate(25);
+    const custom = createTemplate(25);
 
-    template.hasResourceProperties('AWS::Lambda::Function', {
+    custom.hasResourceProperties('AWS::Lambda::Function', {
       ReservedConcurrentExecutions: 25,
     });
   });
 
   it('should create a Function URL', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::Lambda::Url', {
       AuthType: 'NONE',
     });
   });
 
   it('should create a dead letter queue', () => {
-    const template = createTemplate();
-
     template.hasResource('AWS::SQS::Queue', {});
   });
 
   it('should have X-Ray tracing enabled', () => {
-    const template = createTemplate();
-
     template.hasResourceProperties('AWS::Lambda::Function', {
       TracingConfig: {
         Mode: 'Active',
