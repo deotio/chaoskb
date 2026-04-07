@@ -31,7 +31,12 @@ function assert(condition, message) {
   }
 }
 
-const EXPECTED_TOOLS = ['kb_ingest', 'kb_query', 'kb_list', 'kb_delete', 'kb_summary'];
+const EXPECTED_TOOLS = [
+  'kb_ingest', 'kb_query', 'kb_list', 'kb_delete', 'kb_summary',
+  'kb_query_shared', 'kb_sync_status',
+  'device_link_start', 'device_link_confirm', 'devices_list', 'devices_remove',
+  'rotate_key', 'audit_log', 'revoke_all',
+];
 const TIMEOUT_MS = 120000; // 2 minutes — model download may be needed on first run
 
 console.log('\n=== MCP Server Startup ===');
@@ -57,7 +62,7 @@ try {
     }
   }
 
-  const child = spawn('node', [serverPath, 'mcp'], {
+  const child = spawn('node', [serverPath], {
     env: {
       ...process.env,
       CHAOSKB_UNSAFE_NO_KEYRING: '1',
@@ -122,7 +127,7 @@ try {
       else stableCount = 0;
       lastLen = stderr.length;
       // Server is ready when stderr is stable for 2 seconds
-      if (stableCount >= 20 || Date.now() > Date.now() + 60000) return resolve();
+      if (stableCount >= 20) return resolve();
       setTimeout(check, 100);
     };
     // Give at least 3s initial startup time
