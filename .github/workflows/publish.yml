@@ -35,7 +35,7 @@ jobs:
       # Node 22 ships npm 10.x, so we use npx to run npm 11 for publish only.
       # This avoids the broken `npm install -g npm@latest` self-upgrade.
       - name: Publish server package
-        run: npx npm@11 publish --workspace=server --provenance --access public
+        run: npx npm@11.12.1 publish --workspace=server --provenance --access public
 
       - name: Publish client package
-        run: npx npm@11 publish --workspace=src --provenance --access public
+        run: npx npm@11.12.1 publish --workspace=src --provenance --access public

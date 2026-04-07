@@ -5,7 +5,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/de-otio/chaoskb.git",
+    "url": "git+https://github.com/de-otio/chaoskb.git",
     "directory": "server"
   },
   "keywords": [
