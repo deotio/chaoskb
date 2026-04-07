@@ -37,16 +37,19 @@ That's it. On first launch, ChaosKB detects your SSH key, enables sync automatic
 | Tier | Key management | Recovery |
 |------|---------------|----------|
 | **Standard** (default) | Your SSH key | Same SSH key on new device restores everything |
+| **Enhanced** (deprecated) | 24-word recovery key + SSH key | Recovery key OR SSH private key |
 | **Maximum** | Passphrase you choose | Re-enter passphrase on new device |
 
-Both tiers are end-to-end encrypted — the server stores only ciphertext it cannot decrypt. Lose your SSH key or forget your passphrase, and your data is gone. No backdoor, no recovery phrase, no server-side key escrow.
+All tiers are end-to-end encrypted — the server stores only ciphertext it cannot decrypt. Lose your key material (SSH key, recovery words, or passphrase depending on tier), and your data is gone. No backdoor, no server-side key escrow. Enhanced is deprecated for new installations; use Maximum for stronger protection.
 
 ## Self-hosting
 
 Deploy your own backend with a single command:
 
 ```bash
-npx chaoskb-deploy
+npx chaoskb-deploy --ssh-pubkey ~/.ssh/id_ed25519.pub
+# or, fetch the public key from GitHub:
+npx chaoskb-deploy --github <username>
 ```
 
 This creates a Lambda Function URL + DynamoDB table in your AWS account. See [self-hosting docs](doc/design/self-hosting.md).
@@ -60,6 +63,7 @@ This creates a Lambda Function URL + DynamoDB table in your AWS account. See [se
 - [MCP tools reference](doc/user/mcp-tools.md) — what you can ask your agent to do
 - [Security tiers](doc/user/security-tiers.md) — choosing, upgrading, recovery
 - [Managing your library](doc/user/managing-your-library.md) — search, delete, cleanup, storage
+- [Project knowledge bases](doc/user/project-knowledge-bases.md) — isolated, scoped KBs for specific work
 - [Data portability](doc/user/data-portability.md) — export, import, migrate
 - [Troubleshooting](doc/user/troubleshooting.md) — common issues and fixes
 
@@ -79,6 +83,7 @@ This creates a Lambda Function URL + DynamoDB table in your AWS account. See [se
 - [Server architecture](doc/design/server-architecture.md) — minimal encrypted storage API
 - [MCP integration](doc/design/mcp-integration.md) — how chat agents interact with the knowledge base
 - [Threat model](doc/design/threat-model.md) — what's protected, what's not, residual risks
+- [Tier upgrade protocol](doc/design/tier-upgrade.md) — cryptographic protocol for changing tiers
 - [Portability](doc/design/portability.md) — data export, instance migration, shutdown guarantee
 - [Self-hosting](doc/design/self-hosting.md) — deploy your own backend, client configuration
 
