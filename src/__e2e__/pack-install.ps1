@@ -30,7 +30,10 @@ try {
     # 1. npm pack
     Set-Location $SrcDir
     $packOutput = npm pack --pack-destination $env:TEMP 2>&1
-    $tarball = ($packOutput | Select-Object -Last 1).Trim()
+    # npm pack may emit warnings to stderr; 2>&1 turns those into ErrorRecord
+    # objects which lack .Trim(). Filter to strings to get just the tarball name.
+    $tarball = [string]($packOutput | Where-Object { $_ -is [string] } | Select-Object -Last 1)
+    $tarball = $tarball.Trim()
     $tarballPath = Join-Path $env:TEMP $tarball
 
     if (Test-Path $tarballPath) {
