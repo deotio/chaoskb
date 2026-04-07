@@ -135,12 +135,26 @@ export class SSHSigner {
    * Sign using the SSH private key file on disk.
    * Uses sshpk for key parsing (handles all SSH key formats: OpenSSH, PEM, PKCS8)
    * and Node's native crypto.sign for the actual signature.
+   *
+   * When sshpk's PKCS8 PEM output isn't accepted by createPrivateKey (e.g.
+   * Ed25519 on Windows + Node 20), falls back to building a DER PKCS8 key
+   * directly from the raw key material.
    */
   private async signWithKeyFile(canonical: string): Promise<Buffer> {
+    const { createPrivateKey } = await import('node:crypto');
     const keyData = await readFile(this.keyPath, 'utf-8');
     const sshKey = sshpk.parsePrivateKey(keyData, 'auto');
-    const privateKey = sshKey.toBuffer('pkcs8') as Buffer;
-    const keyObject = (await import('node:crypto')).createPrivateKey({ key: privateKey, format: 'pem' });
+
+    let keyObject;
+    try {
+      const privateKey = sshKey.toBuffer('pkcs8') as Buffer;
+      keyObject = createPrivateKey({ key: privateKey, format: 'pem' });
+    } catch {
+      // sshpk's PKCS8 PEM may not be accepted on all platforms (e.g. Windows
+      // Node 20 with Ed25519). Build the key from raw components instead.
+      keyObject = createKeyFromRawParts(createPrivateKey, sshKey);
+    }
+
     const data = Buffer.from(canonical, 'utf-8');
     const algorithm =
       keyObject.asymmetricKeyType === 'ed25519' || keyObject.asymmetricKeyType === 'ed448'
@@ -184,6 +198,41 @@ export class SSHSigner {
       socket.destroy();
     }
   }
+}
+
+/**
+ * Build a Node KeyObject directly from sshpk's raw key parts.
+ * This avoids sshpk's PKCS8 PEM serialisation which can be rejected by
+ * certain OpenSSL builds (notably Windows + Node 20 for Ed25519).
+ */
+function createKeyFromRawParts(
+  createPrivateKey: typeof import('node:crypto').createPrivateKey,
+  sshKey: sshpk.PrivateKey,
+) {
+  if (sshKey.type === 'ed25519') {
+    const seed = (sshKey.parts.find((p: { name: string }) => p.name === 'k') as { data: Buffer }).data;
+    // PKCS8 DER envelope for Ed25519: SEQUENCE { version, algorithm OID, OCTET STRING { seed } }
+    const pkcs8Prefix = Buffer.from('302e020100300506032b657004220420', 'hex');
+    return createPrivateKey({ key: Buffer.concat([pkcs8Prefix, seed]), format: 'der', type: 'pkcs8' });
+  }
+
+  // For RSA, reconstruct via JWK from sshpk's raw components.
+  // sshpk's type definitions don't expose individual part names, so we
+  // access them via the parts array which has { name, data } entries.
+  if (sshKey.type === 'rsa') {
+    const partMap = new Map(sshKey.parts.map((p: { name: string; data: Buffer }) => [p.name, p.data]));
+    const get = (name: string) => {
+      const data = partMap.get(name);
+      if (!data) throw new Error(`Missing RSA key part: ${name}`);
+      return data.toString('base64url');
+    };
+    return createPrivateKey({
+      key: { kty: 'RSA', n: get('n'), e: get('e'), d: get('d'), p: get('p'), q: get('q'), qi: get('iqmp') },
+      format: 'jwk',
+    });
+  }
+
+  throw new Error(`Unsupported key type for raw fallback: ${sshKey.type}`);
 }
 
 // --- SSH Agent Protocol Constants ---
