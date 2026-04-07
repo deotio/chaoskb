@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { generateKeyPairSync } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import sodium from 'sodium-native';
 
 // --- Sequence Counter Integration ---
@@ -56,14 +56,12 @@ describe('SSHSigner with sequence integration', () => {
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'chaoskb-signer-int-'));
 
-    const { privateKey } = generateKeyPairSync('ed25519', {
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    });
-
+    // Use ssh-keygen instead of generateKeyPairSync to avoid OpenSSL
+    // compatibility issues with PKCS8 Ed25519 keys on Node 20.
     keyPath = join(tmpDir, 'id_ed25519');
-    writeFileSync(keyPath, privateKey);
-    writeFileSync(keyPath + '.pub', 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@test');
+    execSync(`ssh-keygen -t ed25519 -f "${keyPath}" -N "" -C "test@test"`, {
+      stdio: 'pipe',
+    });
   });
 
   afterEach(() => {

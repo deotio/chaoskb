@@ -22,8 +22,8 @@ describe('schema', () => {
   });
 
   describe('SCHEMA_VERSION', () => {
-    it('should be 3', () => {
-      expect(SCHEMA_VERSION).toBe(3);
+    it('should be 4', () => {
+      expect(SCHEMA_VERSION).toBe(4);
     });
   });
 

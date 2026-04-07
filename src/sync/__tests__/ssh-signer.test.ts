@@ -1,30 +1,24 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { writeFileSync, readFileSync, mkdirSync, rmSync } from 'node:fs';
+import { readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { generateKeyPairSync, createHash, createPublicKey, verify as cryptoVerify } from 'node:crypto';
+import { createHash, createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { SSHSigner } from '../ssh-signer.js';
 
 describe('SSHSigner', () => {
   const testDir = join(tmpdir(), `chaoskb-ssh-signer-test-${Date.now()}`);
   const keyPath = join(testDir, 'id_ed25519');
-  const pubKeyPath = join(testDir, 'id_ed25519.pub');
 
   beforeAll(() => {
     mkdirSync(testDir, { recursive: true });
 
-    // Generate an Ed25519 key pair for testing
-    const { publicKey, privateKey } = generateKeyPairSync('ed25519', {
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    // Generate an Ed25519 key pair using ssh-keygen (OpenSSH format).
+    // Using ssh-keygen instead of Node's generateKeyPairSync avoids
+    // OpenSSL compatibility issues with PKCS8 Ed25519 keys on Node 20.
+    execSync(`ssh-keygen -t ed25519 -f "${keyPath}" -N "" -C "test@example.com"`, {
+      stdio: 'pipe',
     });
-
-    writeFileSync(keyPath, privateKey, 'utf-8');
-    writeFileSync(pubKeyPath, `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com`, 'utf-8');
-
-    // Store PEM for verification reference
-    void publicKey;
   });
 
   afterAll(() => {
