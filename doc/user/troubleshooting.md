@@ -63,15 +63,16 @@ Your synced storage quota is full. New articles still save and search locally â€
 
 ## Article ingest fails
 
-**Symptom:** "Could not fetch" or "Extraction failed" when saving a URL.
+**Symptom:** "Could not fetch", "Extraction failed", or "URL blocked" when saving a URL.
 
 **Common causes:**
+- The URL is on a known malicious-site blocklist ("URL blocked" error)
 - The URL is behind a paywall or login wall (ChaosKB fetches as an anonymous visitor)
 - The site blocks automated requests
 - The content is an unsupported format (images, video, etc.)
 - Network connectivity issue
 
-**Fix:** Try the URL in your browser. If it loads, the site may be blocking non-browser requests. There is no workaround for paywalled content.
+**Fix:** Try the URL in your browser. If it loads, the site may be blocking non-browser requests. There is no workaround for paywalled content. URLs flagged as malicious cannot be overridden.
 
 For local files, use the `filePath` parameter instead of `url`. ChaosKB supports PDF, DOCX, PPTX, HTML, TXT, and MD files.
 

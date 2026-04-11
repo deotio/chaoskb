@@ -14,6 +14,7 @@
  */
 
 import type { ExtractedContent } from './types.js';
+import { safetyChecker } from './safety.js';
 
 // ===== Public types ========================================================
 
@@ -274,36 +275,6 @@ const CONTROL_CHAR_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
 
 const ZERO_WIDTH_RE = /[\u200B-\u200F\u202A-\u202F\u2060-\u206F\uFEFF]/g;
 
-// --- Prompt injection patterns ---------------------------------------------
-
-const PROMPT_INJECTION_PATTERNS = [
-  // Instruction override attempts
-  /ignore (?:all )?(?:previous|prior|above|earlier) (?:instructions|prompts|context)/i,
-  /disregard (?:all )?(?:previous|prior|above|earlier) (?:instructions|prompts|context)/i,
-  /forget (?:all )?(?:previous|prior|above|earlier) (?:instructions|prompts|context)/i,
-  /override (?:all )?(?:previous|prior|above|earlier) (?:instructions|prompts|context)/i,
-
-  // System/role impersonation
-  /^system\s*:/im,
-  /you are now (?:a |an )?(?:new |different )?(?:AI|assistant|bot|agent)/i,
-  /your (?:new |real |actual )?(?:role|purpose|instructions?|directive) (?:is|are)\b/i,
-  /act(?:ing)? as (?:a |an )?(?:new |different )?\w+ (?:AI|assistant|agent)/i,
-  /entering (?:a )?(?:new |special |admin )?mode/i,
-
-  // Delimiter/framing escape
-  /<\/system>/i,
-  /\[\/INST\]/i,
-  /\[INST\]/i,
-  /<<\s*SYS\s*>>/i,
-  /END_SYSTEM/i,
-  /BEGIN_(?:USER|INSTRUCTIONS)/i,
-
-  // Meta-instruction patterns
-  /(?:important|critical|urgent)[\s:]+(?:system|security) (?:update|notice|message|override)/i,
-  /the (?:above|previous) (?:warning|message|instructions?) (?:is|are|was) (?:outdated|incorrect|old|deprecated)/i,
-  /do not (?:mention|reveal|disclose|tell|share) (?:this|these) (?:instructions?|prompt)/i,
-  /(?:when|if) (?:the )?(?:user|human) asks?\b.*(?:always|instead|actually)/i,
-];
 
 // ===== Public API ==========================================================
 
@@ -346,7 +317,7 @@ export function validateContent(
   checkNavigationOnly(text, issues);
   checkEncodingGarbage(text, issues);
   checkZeroWidthCharacters(text, issues);
-  checkPromptInjection(text, issues);
+  checkInjectionAndSecrets(text, issues);
 
   return issues;
 }
@@ -367,7 +338,7 @@ export function validateFileContent(extracted: ExtractedContent): ContentIssue[]
   checkNavigationOnly(text, issues);
   checkEncodingGarbage(text, issues);
   checkZeroWidthCharacters(text, issues);
-  checkPromptInjection(text, issues);
+  checkInjectionAndSecrets(text, issues);
 
   return issues;
 }
@@ -724,33 +695,32 @@ function checkZeroWidthCharacters(text: string, issues: ContentIssue[]): void {
   }
 }
 
-function checkPromptInjection(text: string, issues: ContentIssue[]): void {
-  const matchedPatterns: string[] = [];
-  for (const pattern of PROMPT_INJECTION_PATTERNS) {
-    if (pattern.test(text)) {
-      matchedPatterns.push(pattern.source);
-    }
+function checkInjectionAndSecrets(text: string, issues: ContentIssue[]): void {
+  const injection = safetyChecker.checkContentInjection(text);
+  if (injection.decision !== 'allow') {
+    const count = injection.matchCount;
+    issues.push({
+      severity: 'warning',
+      code: 'possible-prompt-injection',
+      message:
+        count >= 3
+          ? `The extracted content matches ${count} prompt-injection patterns ` +
+            '(instruction overrides, role impersonation, or delimiter escapes). ' +
+            'This content has a high likelihood of containing adversarial text designed to manipulate an AI agent.'
+          : 'The extracted content contains text that resembles a prompt-injection attempt ' +
+            '(e.g. instruction overrides, system impersonation, or delimiter escapes). ' +
+            'The content was stored but may contain adversarial text.',
+    });
   }
 
-  if (matchedPatterns.length === 0) return;
-
-  if (matchedPatterns.length >= 3) {
+  const secrets = safetyChecker.checkContentSecrets(text);
+  if (secrets.decision !== 'allow') {
     issues.push({
       severity: 'warning',
-      code: 'possible-prompt-injection',
+      code: 'possible-credentials',
       message:
-        `The extracted content matches ${matchedPatterns.length} prompt-injection patterns ` +
-        '(instruction overrides, role impersonation, or delimiter escapes). ' +
-        'This content has a high likelihood of containing adversarial text designed to manipulate an AI agent.',
-    });
-  } else {
-    issues.push({
-      severity: 'warning',
-      code: 'possible-prompt-injection',
-      message:
-        'The extracted content contains text that resembles a prompt-injection attempt ' +
-        '(e.g. instruction overrides, system impersonation, or delimiter escapes). ' +
-        'The content was stored but may contain adversarial text.',
+        'The extracted content appears to contain credentials or secret keys. ' +
+        'Review before using this content with any external services.',
     });
   }
 }

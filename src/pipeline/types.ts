@@ -14,6 +14,8 @@ export interface PipelineConfig {
   userAgent: string;
   /** Skip SSRF validation — ONLY for tests against localhost servers */
   _skipSsrfCheck?: boolean;
+  /** Skip URL safety check — ONLY for tests against localhost servers */
+  _skipSafetyCheck?: boolean;
 }
 
 /** Extracted content from a URL */
