@@ -1,5 +1,5 @@
 import { writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -77,7 +77,7 @@ describe('extractFromFile', () => {
     it('sets url to the absolute file path', async () => {
       const result = await extractFromFile(fixture('sample.txt'));
       expect(result.url).toContain('sample.txt');
-      expect(result.url).toMatch(/^\//); // absolute path
+      expect(isAbsolute(result.url)).toBe(true); // absolute path (cross-platform)
     });
 
     it('computes byte length correctly', async () => {
@@ -124,7 +124,7 @@ describe('extractFromFile', () => {
   // --- PDF extraction ------------------------------------------------------
 
   describe('PDF files', () => {
-    it('extracts text from PDF', async () => {
+    it('extracts text from PDF', { timeout: 30000 }, async () => {
       const result = await extractFromFile(fixture('sample.pdf'));
       expect(result.content).toContain('Climate');
       expect(result.content.length).toBeGreaterThan(100);

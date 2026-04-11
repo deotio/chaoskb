@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-04-12
+
+### Fixed
+- CI: removed unused `MAX_RESPONSE_BYTES` import in `fetch.test.ts` (ESLint error)
+- CI: Windows path assertion in `file-extract.test.ts` now uses `path.isAbsolute()` instead of a Unix-only regex
+- CI: PDF extraction test timeout raised to 30 s on all platforms
+- Publish: skip broken v0.3.5 tag (workflow had switched from OIDC to missing `NPM_TOKEN` secret); OIDC trusted publishing restored
+
 ## [0.3.5] - 2026-04-11
 
 ### Added

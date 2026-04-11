@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { fetchUrl, validateUrl, MAX_RESPONSE_BYTES } from '../fetch.js';
+import { fetchUrl, validateUrl } from '../fetch.js';
 
 let server: Server;
 let baseUrl: string;
