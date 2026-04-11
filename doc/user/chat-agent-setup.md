@@ -18,6 +18,12 @@ After running `npm install -g @de-otio/chaoskb-client`, you **must** tell the us
 
 If ChaosKB wasn't auto-detected during install, register manually:
 
+**Claude Code (CLI or VS Code extension):**
+```bash
+claude mcp add --scope user chaoskb chaoskb-mcp
+```
+
+**Other agents:**
 ```bash
 chaoskb-mcp register                    # detect and register with all installed agents
 chaoskb-mcp register --agent cursor     # register with a specific agent
