@@ -146,7 +146,7 @@ describe('Envelope v1', () => {
 
       const badEnvelope = { ...envelope, v: 2 as any };
 
-      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow('Unsupported envelope version');
+      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow(/unsupported envelope version/i);
 
       disposeKeySet(keys);
     });
@@ -163,7 +163,7 @@ describe('Envelope v1', () => {
         enc: { ...envelope.enc, 'ct.len': envelope.enc['ct.len'] + 1 },
       };
 
-      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow('Ciphertext length mismatch');
+      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow(/ciphertext length mismatch/i);
 
       disposeKeySet(keys);
     });
@@ -213,7 +213,7 @@ describe('Envelope v1', () => {
         enc: { ...envelope.enc, commit: fakeCommit },
       };
 
-      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow('Key commitment verification failed');
+      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow(/key commitment verification failed/i);
 
       disposeKeySet(keys);
     });

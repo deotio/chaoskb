@@ -85,7 +85,7 @@ describe('Adversarial tests', () => {
         },
       };
 
-      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow('Truncated ciphertext');
+      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow(/truncated ciphertext/i);
 
       disposeKeySet(keys);
     });
@@ -104,7 +104,7 @@ describe('Adversarial tests', () => {
         },
       };
 
-      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow('Ciphertext length mismatch');
+      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow(/ciphertext length mismatch/i);
 
       disposeKeySet(keys);
     });
@@ -152,7 +152,7 @@ describe('Adversarial tests', () => {
 
       // v=2 should be rejected at version check
       const badEnvelope = { ...envelope, v: 2 as any };
-      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow('Unsupported envelope version');
+      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow(/unsupported envelope version/i);
 
       disposeKeySet(keys);
     });
@@ -176,7 +176,7 @@ describe('Adversarial tests', () => {
       };
 
       // Commitment binds to blob ID, so this should fail
-      expect(() => decryptEnvelope(swapped, keys)).toThrow('Key commitment verification failed');
+      expect(() => decryptEnvelope(swapped, keys)).toThrow(/key commitment verification failed/i);
 
       disposeKeySet(keys);
     });
@@ -194,7 +194,7 @@ describe('Adversarial tests', () => {
         },
       };
 
-      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow('Key commitment verification failed');
+      expect(() => decryptEnvelope(badEnvelope, keys)).toThrow(/key commitment verification failed/i);
 
       disposeKeySet(keys);
     });
