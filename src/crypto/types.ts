@@ -1,22 +1,27 @@
-/**
- * Memory-locked buffer for sensitive key material.
- * Wraps sodium_malloc() with mlock and auto-zeroing on dispose.
- */
-export interface ISecureBuffer {
-  /** Read the buffer contents. Throws if disposed. */
-  readonly buffer: Buffer;
-  /** Byte length of the buffer */
-  readonly length: number;
-  /** Whether the buffer has been zeroed and disposed */
-  readonly isDisposed: boolean;
-  /** Zero the buffer contents and release memory */
-  dispose(): void;
-}
+// Types shared with `@de-otio/crypto-envelope` are re-exported below; types
+// unique to chaoskb (payload variants, key tiers, SSH info, service
+// interfaces) are declared here.
 
-/** Supported encryption algorithms */
-export type Algorithm = 'XChaCha20-Poly1305' | 'AES-256-GCM';
+import type {
+  Algorithm as _Algorithm,
+  AnyEnvelope as _AnyEnvelope,
+  EnvelopeV1 as _EnvelopeV1,
+  EnvelopeV2 as _EnvelopeV2,
+  ISecureBuffer as _ISecureBuffer,
+} from '@de-otio/crypto-envelope';
 
-/** Key identifier for derived keys */
+export type ISecureBuffer = _ISecureBuffer;
+export type Algorithm = _Algorithm;
+export type EnvelopeV2 = _EnvelopeV2;
+export type AnyEnvelope = _AnyEnvelope;
+
+/** Envelope wire type (v1). Alias of the package's `EnvelopeV1` — same
+ *  shape, kept under the historical chaoskb name. */
+export type Envelope = _EnvelopeV1;
+
+// ── chaoskb-specific types ─────────────────────────────────────────────
+
+/** Key identifier for derived keys. chaoskb-specific vocabulary. */
 export type KeyId = 'CEK' | 'MEK' | 'EEK';
 
 /** Security tier for key management */
@@ -51,54 +56,6 @@ export interface SSHKeyInfo {
   fingerprint: string;
   comment?: string;
 }
-
-/** Encryption envelope v1 wire format */
-export interface Envelope {
-  /** Envelope version (must be 1) */
-  v: 1;
-  /** Opaque blob identifier (b_ prefix + base62) */
-  id: string;
-  /** ISO 8601 timestamp (server-generated) */
-  ts: string;
-  /** Encryption envelope */
-  enc: {
-    /** Algorithm identifier */
-    alg: Algorithm;
-    /** Key identifier */
-    kid: KeyId;
-    /** Base64-encoded: nonce || ciphertext || auth_tag */
-    ct: string;
-    /** Byte length of decoded ct */
-    'ct.len': number;
-    /** Base64-encoded HMAC-SHA256 key commitment */
-    commit: string;
-  };
-}
-
-/**
- * Envelope v2 CBOR wire format — stores ct and commit as raw binary
- * instead of base64, saving ~33% size on ciphertext.
- */
-export interface EnvelopeV2 {
-  /** Envelope version (must be 2) */
-  v: 2;
-  /** Opaque blob identifier */
-  id: string;
-  /** ISO 8601 timestamp */
-  ts: string;
-  /** Encryption envelope */
-  enc: {
-    alg: Algorithm;
-    kid: KeyId;
-    /** Raw binary: nonce || ciphertext || auth_tag */
-    ct: Uint8Array;
-    /** HMAC-SHA256 key commitment (raw binary) */
-    commit: Uint8Array;
-  };
-}
-
-/** Union type for any supported envelope version */
-export type AnyEnvelope = Envelope | EnvelopeV2;
 
 /** Plaintext payload types */
 export type PayloadType = 'source' | 'chunk' | 'canary';

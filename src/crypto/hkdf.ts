@@ -1,32 +1,17 @@
-import { hkdf } from '@noble/hashes/hkdf.js';
-import { sha256 } from '@noble/hashes/sha2.js';
+import { deriveKey } from '@de-otio/crypto-envelope/primitives';
 
 import { SecureBuffer } from './secure-buffer.js';
 import type { DerivedKeySet } from './types.js';
 
-const DEFAULT_KEY_LENGTH = 32;
+// Re-export `deriveKey` so callers that import it from this module keep working.
+export { deriveKey };
 
 /**
- * Derive a key using HKDF-SHA256 (Extract+Expand per RFC 5869).
- * @param ikm - Input keying material
- * @param info - Context/application-specific info string
- * @param salt - Optional salt (defaults to empty Uint8Array)
- * @param length - Output key length in bytes (default 32)
- */
-export function deriveKey(
-  ikm: Uint8Array,
-  info: string,
-  salt?: Uint8Array,
-  length?: number,
-): Uint8Array {
-  const infoBytes = new TextEncoder().encode(info);
-  return hkdf(sha256, ikm, salt ?? new Uint8Array(0), infoBytes, length ?? DEFAULT_KEY_LENGTH);
-}
-
-/**
- * Derive the complete set of subkeys from a master key.
- * Returns SecureBuffer-wrapped keys for:
- *   CEK (content), MEK (metadata), EEK (embedding), CKY (commit)
+ * Derive the four chaoskb subkeys from a master key via HKDF-SHA256.
+ *
+ * Info strings are chaoskb-specific and MUST NOT change — every encrypted
+ * blob on disk was bound to these labels at encrypt time, and changing them
+ * would mean no existing envelope could decrypt.
  */
 export function deriveKeySet(masterKey: Uint8Array, salt?: Uint8Array): DerivedKeySet {
   const cekBytes = deriveKey(masterKey, 'chaoskb-content', salt);

@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - SSRF protections (scheme, blocklist, DNS→private-IP) re-run before every Playwright navigation — the headless browser does not bypass `validateUrl`.
 
+### Changed
+- **Crypto primitives extracted to `@de-otio/crypto-envelope`.** chaoskb's in-tree crypto module now re-exports AEAD, HKDF, Argon2id, commitment, canonical JSON, SecureBuffer, AAD construction, blob-ID generation, envelope v1/v2 serialisation, and the high-level `encryptPayload`/`decryptEnvelope` flow from the new package. Internal chaoskb API is unchanged (same `encryptPayload(payload, keys, kid)` signature, same `DerivedKeySet` composition with `chaoskb-content` / `chaoskb-metadata` / `chaoskb-embedding` / `chaoskb-commit` HKDF info strings), so every existing on-disk envelope decrypts byte-identically. Full 223-test suite passes unchanged.
+- New runtime dependency: `@de-otio/crypto-envelope@^0.1.0-alpha.1`.
+
 ## [0.3.6] - 2026-04-12
 
 ### Fixed
