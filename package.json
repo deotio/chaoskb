@@ -1,0 +1,36 @@
+{
+  "name": "@de-otio/chaoskb",
+  "version": "0.3.11",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/de-otio/chaoskb.git"
+  },
+  "workspaces": [
+    "src",
+    "server"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit --project src/tsconfig.json && tsc --noEmit --project server/tsconfig.json",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
+  },
+  "devDependencies": {
+    "@types/sshpk": "^1.17.4",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
+    "@typescript-eslint/parser": "^8.57.1",
+    "@vitest/coverage-v8": "^4.1.0",
+    "eslint": "^10.1.0",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "sshpk": "^1.18.0"
+  }
+}

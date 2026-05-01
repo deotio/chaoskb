@@ -1,0 +1,41 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build server
+        run: npm run build --workspace=server
+
+      - name: Build client
+        run: npm run build --workspace=src
+
+      # npm >= 11.5.1 required for OIDC trusted publishing (npm linked providers).
+      # Node 22 ships npm 10.x, so we use npx to run npm 11 for publish only.
+      # This avoids the broken `npm install -g npm@latest` self-upgrade.
+      - name: Publish server package
+        run: npx npm@11.12.1 publish --workspace=server --provenance --access public
+
+      - name: Publish client package
+        run: npx npm@11.12.1 publish --workspace=src --provenance --access public

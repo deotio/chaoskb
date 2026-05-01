@@ -1,0 +1,147 @@
+name: E2E Platform Tests
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master, dev]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - macos-14
+          - macos-15
+          - windows-latest
+        node-version: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      # --- T1: Dependency installation ---
+      - name: Install dependencies
+        run: npm ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Restore ONNX model cache ---
+      - name: Restore ONNX model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.chaoskb/models
+          key: onnx-model-snowflake-arctic-embed-s-${{ runner.arch }}
+          restore-keys: |
+            onnx-model-snowflake-arctic-embed-s-
+
+      - name: Ensure model directory exists
+        shell: bash
+        run: mkdir -p ~/.chaoskb/models
+
+      # --- Download model if not cached ---
+      - name: Download ONNX model (if not cached)
+        shell: bash
+        run: |
+          MODEL_PATH="$HOME/.chaoskb/models/model.onnx"
+          VOCAB_PATH="$HOME/.chaoskb/models/vocab.txt"
+          if [ ! -f "$MODEL_PATH" ]; then
+            echo "Model not cached — downloading..."
+            curl -L -o "$MODEL_PATH" \
+              "https://huggingface.co/Snowflake/snowflake-arctic-embed-s/resolve/main/onnx/model.onnx"
+            echo "Model downloaded ($(du -h "$MODEL_PATH" | cut -f1))"
+          else
+            echo "Model restored from cache"
+          fi
+          if [ ! -f "$VOCAB_PATH" ]; then
+            curl -L -o "$VOCAB_PATH" \
+              "https://huggingface.co/Snowflake/snowflake-arctic-embed-s/resolve/main/vocab.txt"
+            echo "Vocab downloaded"
+          else
+            echo "Vocab restored from cache"
+          fi
+
+      # --- T2: Build ---
+      - name: Build client
+        run: npm run build --workspace src
+
+      - name: Verify build artifacts
+        shell: bash
+        run: |
+          test -f src/dist/cli/index.js || (echo "FAIL: dist/cli/index.js missing" && exit 1)
+          test -f src/dist/cli/agent-registry/registry.json || (echo "FAIL: registry.json missing" && exit 1)
+          echo "Build artifacts verified"
+
+      - name: Verify shebang (POSIX only)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          FIRST_LINE=$(head -1 src/dist/cli/index.js)
+          if [ "$FIRST_LINE" != "#!/usr/bin/env node" ]; then
+            echo "FAIL: shebang is '$FIRST_LINE'"
+            exit 1
+          fi
+          echo "Shebang verified"
+
+      # --- T3: CLI smoke test ---
+      - name: CLI --help
+        run: node src/dist/cli/index.js --help
+
+      - name: CLI --version
+        run: node src/dist/cli/index.js --version
+
+      - name: Shebang execution (POSIX only)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          chmod +x src/dist/cli/index.js
+          ./src/dist/cli/index.js --help
+
+      # --- T4: Native module correctness ---
+      - name: Native module tests
+        working-directory: src
+        run: node __e2e__/native-modules.mjs
+
+      # --- T5: Crypto pipeline ---
+      - name: Crypto pipeline tests
+        working-directory: src
+        run: node __e2e__/crypto-pipeline.mjs
+
+      # --- T6: Database layer ---
+      - name: Database layer tests
+        working-directory: src
+        run: node __e2e__/database-layer.mjs
+
+      # --- T7: MCP server startup ---
+      - name: MCP server startup test
+        working-directory: src
+        run: node __e2e__/mcp-startup.mjs
+        env:
+          CHAOSKB_UNSAFE_NO_KEYRING: '1'
+
+      # --- Unit tests ---
+      - name: Unit tests
+        run: npm test
+
+      # --- T8: Pack & install (POSIX) ---
+      - name: Pack & install test (POSIX)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: bash src/__e2e__/pack-install.sh
+
+      # --- T8: Pack & install (Windows) ---
+      - name: Pack & install test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & src/__e2e__/pack-install.ps1

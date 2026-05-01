@@ -1,0 +1,62 @@
+{
+  "name": "@de-otio/chaoskb-server",
+  "version": "0.3.11",
+  "description": "ChaosKB server - CDK construct library for the hosted backend",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/de-otio/chaoskb.git",
+    "directory": "server"
+  },
+  "keywords": [
+    "chaoskb",
+    "knowledge-base",
+    "aws-cdk",
+    "dynamodb",
+    "encrypted-sync"
+  ],
+  "main": "./dist/lib/index.js",
+  "types": "./dist/lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "default": "./dist/lib/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && cp lib/handler/*.ts dist/lib/handler/ && cp lib/handler/middleware/*.ts dist/lib/handler/middleware/ && cp lib/handler/routes/*.ts dist/lib/handler/routes/ && mkdir -p dist/lib/admin-handler/routes && cp lib/admin-handler/*.ts dist/lib/admin-handler/ && cp lib/admin-handler/routes/*.ts dist/lib/admin-handler/routes/",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1014.0",
+    "@aws-sdk/client-cost-explorer": "^3.1014.0",
+    "@aws-sdk/client-dynamodb": "^3.1014.0",
+    "@aws-sdk/client-ses": "^3.1014.0",
+    "@aws-sdk/client-ssm": "^3.1014.0",
+    "@aws-sdk/lib-dynamodb": "^3.1014.0",
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@vitest/coverage-v8": "^4.1.0",
+    "esbuild": "^0.28.0",
+    "vitest": "^4.1.0"
+  },
+  "peerDependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

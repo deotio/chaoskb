@@ -1,0 +1,13 @@
+title = "ChaosKB gitleaks config"
+
+[allowlist]
+  # Test fixtures and example values
+  paths = [
+    '''__tests__''',
+    '''__e2e__''',
+    '''\.test\.ts$''',
+    '''\.spec\.ts$''',
+    '''node_modules''',
+    '''dist''',
+    '''coverage''',
+  ]
