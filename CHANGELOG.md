@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-05-01 - internal cleanup
+
+### Changed
+
+- Internal repository housekeeping. No functional changes; bundled output
+  is identical in observable behaviour to 0.3.11.
+
 ## [0.3.11] - 2026-04-25
 
 ### Changed
